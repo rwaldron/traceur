@@ -42,19 +42,19 @@ traceur.define('codegeneration', function() {
   var PRETTY_PRINT = true;
 
   /*
-   * Create a ParseTreeWriter configured with options, apply it to tree
+   * Create a ParseTreeWriter configured with opt_options, apply it to tree
    * @param {ParseTree} tree
-   * @param {Object} options:
+   * @param {Object} opt_options:
    *   highlighted: {ParseTree} branch of tree to highlight
    *   showLineNumbers: {boolean} add comments giving input line numbers
    */
 
-  ParseTreeWriter.write = function(tree, options) {
+  ParseTreeWriter.write = function(tree, opt_options) {
     var showLineNumbers;
     var highlighted = null;
-    if (options) {
-      showLineNumbers = options.showLineNumbers;
-      highlighted = options.highlighted || null;
+    if (opt_options) {
+      showLineNumbers = opt_options.showLineNumbers;
+      highlighted = opt_options.highlighted || null;
     }
     
     var writer = new ParseTreeWriter(highlighted, showLineNumbers);
