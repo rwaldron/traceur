@@ -218,6 +218,7 @@ var traceur = (function() {
       'codegeneration/GeneratorTransformPass.js',
       'semantics/FreeVariableChecker.js',
       'codegeneration/ProgramTransformer.js',
+      'outputgeneration/LinearizeTransformer.js', 
       'outputgeneration/ProjectWriter.js',
       'codegeneration/module/ModuleVisitor.js',
       'codegeneration/module/ModuleDefinitionVisitor.js',
