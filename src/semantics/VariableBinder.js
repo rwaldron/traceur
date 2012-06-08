@@ -231,7 +231,7 @@ traceur.define('semantics', function() {
       } else {
         // Formal parameters are otherwise like variable
         // declarations--identifier expressions and patterns
-        this.bindVariableDeclaration_(parameter);
+        this.bindVariableDeclaration_(parameter.binding);
       }
     },
 
@@ -245,7 +245,7 @@ traceur.define('semantics', function() {
           break;
 
         case ParseTreeType.ARRAY_PATTERN:
-          var i = tree.elements;
+          var elements = tree.elements;
           for (var i = 0; i < elements.length; i++) {
             this.bindVariableDeclaration_(elements[i]);
           }

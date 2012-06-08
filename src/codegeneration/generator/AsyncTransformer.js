@@ -91,7 +91,8 @@ traceur.define('codegeneration.generator', function() {
     return new AsyncTransformer(reporter).transformAsyncBody(body);
   };
 
-  AsyncTransformer.prototype = traceur.createObject(CPSTransformer.prototype, {
+  var proto = CPSTransformer.prototype;
+  AsyncTransformer.prototype = traceur.createObject(proto, {
 
     /**
      * Yield statements are translated into a state machine with a single state.
@@ -99,7 +100,7 @@ traceur.define('codegeneration.generator', function() {
      * @return {ParseTree}
      */
     transformYieldStatement: function(tree) {
-      reporter.reportError(tree.location.start,
+      this.reporter.reportError(tree.location.start,
           'Async function may not have a yield statement.');
       return tree;
     },
@@ -163,7 +164,7 @@ traceur.define('codegeneration.generator', function() {
         return result;
       }
       // TODO: is this a reasonable restriction?
-      reporter.reportError(tree.location.start, 'async not permitted within a finally block.');
+      this.reporter.reportError(tree.location.start, 'async not permitted within a finally block.');
       return result;
     },
 

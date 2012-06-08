@@ -18,18 +18,23 @@ traceur.define('codegeneration', function() {
   var ParseTreeFactory = traceur.codegeneration.ParseTreeFactory;
   var ParseTreeTransformer = traceur.codegeneration.ParseTreeTransformer;
   var ParseTreeType = traceur.syntax.trees.ParseTreeType;
+  var TempVarTransformer = traceur.codegeneration.TempVarTransformer;
   var TokenType = traceur.syntax.TokenType;
+  var expandMemberLookupExpression = traceur.codegeneration.expandMemberLookupExpression;
 
   var createArgumentList = ParseTreeFactory.createArgumentList;
-  var createArrayLiteralExpression = ParseTreeFactory.createArrayLiteralExpression;
+  var createAssignmentExpression = ParseTreeFactory.createAssignmentExpression;
+  var createCallCall = ParseTreeFactory.createCallCall;
   var createCallExpression = ParseTreeFactory.createCallExpression;
+  var createCommaExpression = ParseTreeFactory.createCommaExpression;
+  var createIdentifierExpression = ParseTreeFactory.createIdentifierExpression;
   var createMemberExpression = ParseTreeFactory.createMemberExpression;
+  var createParenExpression = ParseTreeFactory.createParenExpression;
 
   var RUNTIME = traceur.syntax.PredefinedName.RUNTIME;
   var TRACEUR = traceur.syntax.PredefinedName.TRACEUR;
   var ELEMENT_DELETE = traceur.syntax.PredefinedName.ELEMENT_DELETE;
   var ELEMENT_GET = traceur.syntax.PredefinedName.ELEMENT_GET;
-  var ELEMENT_GET_CALL = traceur.syntax.PredefinedName.ELEMENT_GET_CALL;
   var ELEMENT_HAS = traceur.syntax.PredefinedName.ELEMENT_HAS;
   var ELEMENT_SET = traceur.syntax.PredefinedName.ELEMENT_SET;
 
@@ -59,22 +64,24 @@ traceur.define('codegeneration', function() {
    *   var key = {};
    *   object[key] = 42;
    *
+   * @param {UniqueIdentifierGenerator} identifierGenerator
    * @extends {ParseTreeTransformer}
    * @constructor
    */
-  function CollectionTransformer() {
-    ParseTreeTransformer.call(this);
+  function CollectionTransformer(identifierGenerator) {
+    TempVarTransformer.call(this, identifierGenerator);
   }
 
-  /*
+  /**
+   * @param {UniqueIdentifierGenerator} identifierGenerator
    * @param {ParseTree} tree
    * @return {ParseTree}
    */
-  CollectionTransformer.transformTree = function(tree) {
-    return new CollectionTransformer().transformAny(tree);
+  CollectionTransformer.transformTree = function(identifierGenerator, tree) {
+    return new CollectionTransformer(identifierGenerator).transformAny(tree);
   };
 
-  var proto = ParseTreeTransformer.prototype;
+  var proto = TempVarTransformer.prototype;
   CollectionTransformer.prototype = traceur.createObject(proto, {
     transformBinaryOperator: function(tree) {
       if (tree.operator.type === TokenType.IN) {
@@ -88,8 +95,14 @@ traceur.define('codegeneration', function() {
             createArgumentList(object, name));
       }
 
-      if (tree.operator.type === TokenType.EQUAL &&
-          tree.left.type === ParseTreeType.MEMBER_LOOKUP_EXPRESSION) {
+      if (tree.left.type === ParseTreeType.MEMBER_LOOKUP_EXPRESSION &&
+          tree.operator.isAssignmentOperator()) {
+
+        if (tree.operator.type !== TokenType.EQUAL) {
+          tree = expandMemberLookupExpression(tree, this);
+          return this.transformAny(tree);
+        }
+
         var operand = this.transformAny(tree.left.operand);
         var memberExpression = this.transformAny(tree.left.memberExpression);
         var value = this.transformAny(tree.right);
@@ -114,13 +127,24 @@ traceur.define('codegeneration', function() {
 
       // operand[memberExpr](args)
       // =>
-      // traceur.runtime.elementGetCall(operand, memberExpr, [args])
+      // ($tmp = operand,
+      //  traceur.runtime.elementGet($tmp, memberExpr).call($tmp, args))
 
+      var ident = createIdentifierExpression(this.addTempVar());
       var elements = tree.args.args.map(this.transformAny, this);
-      var arrayLiteral = createArrayLiteralExpression(elements);
-      return createCallExpression(
-          createMemberExpression(TRACEUR, RUNTIME, ELEMENT_GET_CALL),
-          createArgumentList(operand, memberExpression, arrayLiteral));
+      var callExpr = createCallCall(
+          createCallExpression(
+            createMemberExpression(TRACEUR, RUNTIME, ELEMENT_GET),
+            createArgumentList(ident, memberExpression)),
+          ident,
+          elements);
+
+      var expressions = [
+        createAssignmentExpression(ident, operand),
+        callExpr
+      ];
+
+      return createParenExpression(createCommaExpression(expressions));
     },
 
     transformMemberLookupExpression: function(tree) {

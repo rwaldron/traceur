@@ -15,31 +15,44 @@
 traceur.define('codegeneration', function() {
   'use strict';
 
+  var BindingElement = traceur.syntax.trees.BindingElement;
   var BindingIdentifier = traceur.syntax.trees.BindingIdentifier;
+  var Catch = traceur.syntax.trees.Catch;
+  var ForInStatement = traceur.syntax.trees.ForInStatement;
+  var ForOfStatement = traceur.syntax.trees.ForOfStatement;
+  var FunctionDeclaration = traceur.syntax.trees.FunctionDeclaration;
+  var LiteralExpression = traceur.syntax.trees.LiteralExpression;
   var ParseTree = traceur.syntax.trees.ParseTree;
   var ParseTreeFactory = traceur.codegeneration.ParseTreeFactory;
   var ParseTreeType = traceur.syntax.trees.ParseTreeType;
   var PredefinedName = traceur.syntax.PredefinedName;
+  var SetAccessor = traceur.syntax.trees.SetAccessor;
   var TempVarTransformer = traceur.codegeneration.TempVarTransformer;
   var TokenType = traceur.syntax.TokenType;
   var VariableDeclaration = traceur.syntax.trees.VariableDeclaration;
   var VariableDeclarationList = traceur.syntax.trees.VariableDeclarationList;
 
   var createArgumentList = ParseTreeFactory.createArgumentList;
-  var createAssignmentExpression= ParseTreeFactory.createAssignmentExpression;
+  var createAssignmentExpression = ParseTreeFactory.createAssignmentExpression;
+  var createBinaryOperator = ParseTreeFactory.createBinaryOperator;
+  var createBindingIdentifier = ParseTreeFactory.createBindingIdentifier;
+  var createBlock = ParseTreeFactory.createBlock;
   var createCallExpression = ParseTreeFactory.createCallExpression;
   var createCommaExpression = ParseTreeFactory.createCommaExpression;
+  var createConditionalExpression = ParseTreeFactory.createConditionalExpression;
+  var createExpressionStatement = ParseTreeFactory.createExpressionStatement;
   var createIdentifierExpression = ParseTreeFactory.createIdentifierExpression;
   var createMemberExpression = ParseTreeFactory.createMemberExpression;
   var createMemberLookupExpression = ParseTreeFactory.createMemberLookupExpression;
   var createNumberLiteral = ParseTreeFactory.createNumberLiteral;
+  var createOperatorToken = ParseTreeFactory.createOperatorToken;
   var createParenExpression = ParseTreeFactory.createParenExpression;
+  var createStringLiteral = ParseTreeFactory.createStringLiteral;
   var createVariableDeclaration = ParseTreeFactory.createVariableDeclaration;
   var createVariableDeclarationList = ParseTreeFactory.createVariableDeclarationList;
+  var createVariableStatement = ParseTreeFactory.createVariableStatement;
 
-  function toBindingIdentifier(tree) {
-    return new BindingIdentifier(tree.location, tree.identifierToken);
-  }
+  var stack = [];
 
   /**
    * Collects assignments in the desugaring of a pattern.
@@ -83,18 +96,62 @@ traceur.define('codegeneration', function() {
   VariableDeclarationDesugaring.prototype = traceur.createObject(
       Desugaring.prototype, {
     assign: function(lvalue, rvalue) {
-      // TODO(arv): This should go away when destructuring is refactored.
+      if (lvalue.type === ParseTreeType.BINDING_ELEMENT) {
+        this.declarations.push(createVariableDeclaration(lvalue.binding,
+            rvalue));
+        return;
+      }
+
       if (lvalue.type == ParseTreeType.IDENTIFIER_EXPRESSION)
-        lvalue = toBindingIdentifier(lvalue);
+        lvalue = createBindingIdentifier(lvalue);
+
       this.declarations.push(createVariableDeclaration(lvalue, rvalue));
     }
   });
 
   /**
+   * Creates something like "ident" in rvalue ? rvalue.ident : initializer
+   */
+  function createConditionalMemberExpression(rvalue, identToken, initializer) {
+    if (identToken.type !== TokenType.IDENTIFIER) {
+      return createConditionalMemberLookupExpression(rvalue,
+          new LiteralExpression(null, identToken),
+          initializer);
+    }
+
+    if (!initializer)
+      return createMemberExpression(rvalue, identToken);
+
+    return createConditionalExpression(
+        createBinaryOperator(
+            createStringLiteral(identToken.value),
+            createOperatorToken(TokenType.IN),
+            rvalue),
+        createMemberExpression(rvalue, identToken),
+        initializer);
+  }
+
+  /**
+   * Creates something like [index] in rvalue ? rvalue[index] : initializer
+   */
+  function createConditionalMemberLookupExpression(rvalue, index, initializer) {
+    if (!initializer)
+      return createMemberLookupExpression(rvalue, index);
+
+    return createConditionalExpression(
+        createBinaryOperator(
+            index,
+            createOperatorToken(TokenType.IN),
+            rvalue),
+        createMemberLookupExpression(rvalue, index),
+        initializer);
+  }
+
+  /**
    * Desugars destructuring assignment.
    *
    * @see <a href="http://wiki.ecmascript.org/doku.php?id=harmony:destructuring#assignments">harmony:destructuring</a>
-   * 
+   *
    * @param {UniqueIdentifierGenerator} identifierGenerator
    * @constructor
    * @extends {TempVarTransformer}
@@ -210,6 +267,192 @@ traceur.define('codegeneration', function() {
               desugaredDeclarations));
     },
 
+    transformForInStatement: function(tree) {
+      return this.transformForInOrOf_(tree,
+                                      proto.transformForInStatement,
+                                      ForInStatement);
+    },
+
+    transformForOfStatement: function(tree) {
+      return this.transformForInOrOf_(tree,
+                                      proto.transformForOfStatement,
+                                      ForOfStatement);
+    },
+
+    /**
+     * Transforms for-in and for-of loops.
+     * @param  {ForInStatement|ForOfStatement} tree The for-in or for-of loop.
+     * @param  {Function} superMethod The super method to call if no pattern is
+     *     present.
+     * @param  {Function} constr The constructor used to create the transformed
+     *     tree.
+     * @return {ForInStatement|ForOfStatement} The transformed tree.
+     * @private
+     */
+    transformForInOrOf_: function(tree, superMethod, constr) {
+      if (!tree.initializer.isPattern() &&
+          (tree.initializer.type !== ParseTreeType.VARIABLE_DECLARATION_LIST ||
+           !this.destructuringInDeclaration_(tree.initializer))) {
+        return superMethod.call(this, tree);
+      }
+
+      var declarationType, lvalue;
+      if (tree.initializer.isPattern()) {
+        declarationType = null;
+        lvalue = tree.initializer;
+      } else {
+        declarationType = tree.initializer.declarationType;
+        lvalue = tree.initializer.declarations[0].lvalue;
+      }
+
+      // for (var pattern in coll) {
+      //
+      // =>
+      //
+      // for (var $tmp in coll) {
+      //   var pattern = $tmp;
+      //
+      // And when the initializer is an assignment expression.
+      //
+      // for (pattern in coll) {
+      //
+      // =>
+      //
+      // for (var $tmp in coll) {
+      //   pattern = $tmp;
+
+      var statements = [];
+      var binding = this.desugarBinding_(lvalue, statements, declarationType);
+      var initializer = createVariableDeclarationList(TokenType.VAR,
+          binding, null);
+
+      var collection = this.transformAny(tree.collection);
+      var body = this.transformAny(tree.body);
+      if (body.type !== ParseTreeType.BLOCK)
+        body = createBlock(body);
+
+      statements.push.apply(statements, body.statements);
+      body = createBlock(statements);
+
+      return new constr(tree.location, initializer, collection, body);
+    },
+
+    transformFunctionDeclaration: function(tree) {
+      stack.push([]);
+      var transformedTree = proto.transformFunctionDeclaration.call(this, tree);
+      var statements = stack.pop();
+      if (!statements.length)
+        return transformedTree;
+
+      // Prepend the var statements to the block.
+      statements.push.apply(statements,
+                            transformedTree.functionBody.statements);
+
+      return new FunctionDeclaration(transformedTree.location,
+                                     transformedTree.name,
+                                     transformedTree.isGenerator,
+                                     transformedTree.formalParameterList,
+                                     createBlock(statements));
+    },
+
+    transformSetAccessor: function(tree) {
+      stack.push([]);
+      var transformedTree = proto.transformSetAccessor.call(this, tree);
+      var statements = stack.pop();
+      if (!statements.length)
+        return transformedTree;
+
+      // Prepend the var statements to the block.
+      statements.push.apply(statements,
+                            transformedTree.body.statements);
+
+      return new SetAccessor(transformedTree.location,
+                             transformedTree.propertyName,
+                             transformedTree.parameter,
+                             createBlock(statements));
+    },
+
+    transformBindingElement: function(tree) {
+      // If this has an initializer the default parameter transformer moves the
+      // pattern into the function body and it will be taken care of by the
+      // variable pass.
+      if (!tree.binding.isPattern() || tree.initializer)
+        return tree;
+
+      // function f(pattern) { }
+      //
+      // =>
+      //
+      // function f($tmp) {
+      //   var pattern = $tmp;
+      // }
+
+      var statements = stack[stack.length - 1];
+      var binding = this.desugarBinding_(tree.binding, statements,
+                                         TokenType.VAR);
+
+      return new BindingElement(null, binding, null);
+    },
+
+    transformCatch: function(tree) {
+      if (!tree.binding.isPattern())
+        return proto.transformCatch.call(this, tree);
+
+      // catch(pattern) {
+      //
+      // =>
+      //
+      // catch ($tmp) {
+      //   let pattern = $tmp
+
+      var body = this.transformAny(tree.catchBody);
+      var statements = [];
+      var binding = this.desugarBinding_(tree.binding, statements,
+                                         TokenType.LET);
+      statements.push.apply(statements, body.statements);
+      return new Catch(tree.location, binding, createBlock(statements));
+    },
+
+    /**
+     * Helper for transformations that transforms a binding to a temp binding
+     * as well as a statement added into a block. For example, this is used by
+     * function, for-in/of and catch.
+     * @param  {ParseTree} bindingTree The tree with the binding pattern.
+     * @param  {Array} statements Array that we add the assignment/variable
+     *     declaration to.
+     * @param {TokenType?} declarationType The kind of variable declaration to
+     *     generate or null if an assignment expression is to be used.
+     * @return {BindingIdentifier} The binding tree.
+     */
+    desugarBinding_: function(bindingTree, statements, declarationType) {
+      var varName = this.gensym_(bindingTree);
+      var binding = createBindingIdentifier(varName);
+      var idExpr = createIdentifierExpression(varName);
+
+      var desugaring;
+      if (declarationType === null)
+        desugaring = new AssignmentExpressionDesugaring(idExpr);
+      else
+        desugaring = new VariableDeclarationDesugaring(idExpr);
+
+      this.desugarPattern_(desugaring, bindingTree);
+
+      if (declarationType === null) {
+        statements.push(createExpressionStatement(
+          createCommaExpression(desugaring.expressions)));
+      } else {
+        statements.push(
+            createVariableStatement(
+                // Desugar more.
+                this.transformVariableDeclarationList(
+                    createVariableDeclarationList(
+                        declarationType,
+                        desugaring.declarations))));
+      }
+
+      return binding;
+    },
+
     /**
      * @param {VariableDeclarationList} tree
      * @return {boolean}
@@ -245,7 +488,7 @@ traceur.define('codegeneration', function() {
 
           for (var i = 0; i < pattern.elements.length; i++) {
             var lvalue = pattern.elements[i];
-            if (lvalue.isNull()) {
+            if (lvalue === null) {
               // A skip, for example [a,,c]
               continue;
             } else if (lvalue.isSpreadPatternElement()) {
@@ -262,9 +505,10 @@ traceur.define('codegeneration', function() {
             } else {
               desugaring.assign(
                   lvalue,
-                  createMemberLookupExpression(
+                  createConditionalMemberLookupExpression(
                       desugaring.rvalue,
-                      createNumberLiteral(i)));
+                      createNumberLiteral(i),
+                      lvalue.initializer));
             }
           }
           break;
@@ -274,14 +518,32 @@ traceur.define('codegeneration', function() {
           var pattern = tree;
 
           pattern.fields.forEach(function(field) {
-            var lookup =
-                createMemberExpression(desugaring.rvalue, field.identifier);
-            desugaring.assign(
-                field.element == null ?
-                    // Just 'a' is sugar for 'a: a'
-                    createIdentifierExpression(field.identifier) :
-                    field.element,
-                lookup);
+            var lookup;
+            switch (field.type) {
+              case ParseTreeType.BINDING_ELEMENT:
+                lookup = createConditionalMemberExpression(desugaring.rvalue,
+                    field.binding.identifierToken, field.initializer);
+                desugaring.assign(
+                    createIdentifierExpression(field.binding),
+                    lookup);
+                break;
+
+              case ParseTreeType.OBJECT_PATTERN_FIELD:
+                lookup = createConditionalMemberExpression(desugaring.rvalue,
+                    field.identifier, field.element.initializer);
+                desugaring.assign(field.element, lookup);
+                break;
+
+              case ParseTreeType.IDENTIFIER_EXPRESSION:
+                lookup = createMemberExpression(
+                    desugaring.rvalue, field.identifierToken);
+
+                desugaring.assign(field, lookup);
+                break
+
+              default:
+                throw Error('unreachable');
+            }
           });
           break;
         }
@@ -314,8 +576,16 @@ traceur.define('codegeneration', function() {
      * @return {Object}
      */
     collectLvalueIdentifiers_: function(identifiers, tree) {
+      // ArrayPatterns can contain null elements.
+      if (tree === null)
+        return;
 
       switch (tree.type) {
+        case ParseTreeType.BINDING_ELEMENT:
+          this.collectLvalueIdentifiers_(identifiers, tree.binding);
+          break;
+
+        case ParseTreeType.BINDING_IDENTIFIER:
         case ParseTreeType.IDENTIFIER_EXPRESSION:
           identifiers[tree.identifierToken.value] = true;
           break;
@@ -328,17 +598,20 @@ traceur.define('codegeneration', function() {
 
         case ParseTreeType.OBJECT_PATTERN:
           tree.fields.forEach(function(f) {
-            if (f.element == null) {
-              identifiers[f.identifier.value] = true;
-            } else {
-              this.collectLvalueIdentifiers_(identifiers, f.element);
-            }
+            this.collectLvalueIdentifiers_(identifiers, f);
           }, this);
           break;
 
+        case ParseTreeType.OBJECT_PATTERN_FIELD:
+          this.collectLvalueIdentifiers_(identifiers, tree.element);
+          break;
+
         case ParseTreeType.PAREN_EXPRESSION:
-          this.collectLvalueIdentifiers_(identifiers,
-              tree.expression);
+          this.collectLvalueIdentifiers_(identifiers, tree.expression);
+          break;
+
+        case ParseTreeType.SPREAD_PATTERN_ELEMENT:
+          this.collectLvalueIdentifiers_(identifiers, tree.lvalue);
           break;
 
         default:

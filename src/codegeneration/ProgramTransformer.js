@@ -15,32 +15,29 @@
 traceur.define('codegeneration', function() {
   'use strict';
 
+  var ArrowFunctionTransformer = traceur.codegeneration.ArrowFunctionTransformer;
+  var BlockBindingTransformer = traceur.codegeneration.BlockBindingTransformer;
+  var CascadeExpressionTransformer = traceur.codegeneration.CascadeExpressionTransformer;
+  var ClassTransformer = traceur.codegeneration.ClassTransformer;
+  var ClassTransformer = traceur.codegeneration.ClassTransformer;
+  var CollectionTransformer = traceur.codegeneration.CollectionTransformer;
+  var ConciseBodyTransformer = traceur.codegeneration.ConciseBodyTransformer;
+  var DefaultParametersTransformer = traceur.codegeneration.DefaultParametersTransformer;
+  var DestructuringTransformer = traceur.codegeneration.DestructuringTransformer;
+  var ForOfTransformer = traceur.codegeneration.ForOfTransformer;
+  var FreeVariableChecker = traceur.semantics.FreeVariableChecker;
+  var GeneratorTransformPass = traceur.codegeneration.GeneratorTransformPass;
+  var IsExpressionTransformer = traceur.codegeneration.IsExpressionTransformer;
+  var ModuleTransformer = traceur.codegeneration.ModuleTransformer;
   var ObjectMap = traceur.util.ObjectMap;
-
   var ParseTreeValidator = traceur.syntax.ParseTreeValidator;
   var ProgramTree = traceur.syntax.trees.ProgramTree;
-  var UniqueIdentifierGenerator = traceur.codegeneration.UniqueIdentifierGenerator;
-  var ForOfTransformer = traceur.codegeneration.ForOfTransformer;
   var PropertyMethodAssignmentTransformer = traceur.codegeneration.PropertyMethodAssignmentTransformer;
   var PropertyNameShorthandTransformer = traceur.codegeneration.PropertyNameShorthandTransformer;
-  var RestParameterTransformer = traceur.codegeneration.RestParameterTransformer;
-  var DefaultParametersTransformer = traceur.codegeneration.DefaultParametersTransformer;
-  var GeneratorTransformPass = traceur.codegeneration.GeneratorTransformPass;
-  var DestructuringTransformer = traceur.codegeneration.DestructuringTransformer;
-  var SpreadTransformer = traceur.codegeneration.SpreadTransformer;
-  var BlockBindingTransformer = traceur.codegeneration.BlockBindingTransformer;
-  var TraitTransformer = traceur.codegeneration.TraitTransformer;
-  var ClassTransformer = traceur.codegeneration.ClassTransformer;
-  var ModuleTransformer = traceur.codegeneration.ModuleTransformer;
-  var FreeVariableChecker = traceur.semantics.FreeVariableChecker;
-  var ArrowFunctionTransformer = traceur.codegeneration.ArrowFunctionTransformer;
   var QuasiLiteralTransformer = traceur.codegeneration.QuasiLiteralTransformer;
-  var CollectionTransformer = traceur.codegeneration.CollectionTransformer;
-  var CascadeExpressionTransformer = traceur.codegeneration.CascadeExpressionTransformer;
-  var IsExpressionTransformer = traceur.codegeneration.IsExpressionTransformer;
-
-  var CLASS_DECLARATION = traceur.syntax.trees.ParseTreeType.CLASS_DECLARATION;
-  var TRAIT_DECLARATION = traceur.syntax.trees.ParseTreeType.TRAIT_DECLARATION;
+  var RestParameterTransformer = traceur.codegeneration.RestParameterTransformer;
+  var SpreadTransformer = traceur.codegeneration.SpreadTransformer;
+  var UniqueIdentifierGenerator = traceur.codegeneration.UniqueIdentifierGenerator;
 
   var options = traceur.options.transform;
 
@@ -56,7 +53,6 @@ traceur.define('codegeneration', function() {
     this.reporter_ = reporter;
     this.results_ = new ObjectMap();
     this.identifierGenerator_ = new UniqueIdentifierGenerator();
-    Object.freeze(this);
   }
 
   /**
@@ -169,15 +165,21 @@ traceur.define('codegeneration', function() {
       // TODO: many of these simple, local transforms could happen in the same
       // tree pass
 
-      chain(options.quasi, QuasiLiteralTransformer.transformTree, identifierGenerator);
+      chain(options.quasi, QuasiLiteralTransformer.transformTree,
+            identifierGenerator);
       chain(options.arrowFunctions,
             ArrowFunctionTransformer.transformTree, reporter);
+
+      // ClassTransformer needs to come before
+      // PropertyMethodAssignmentTransformer.
+      chain(options.classes, ClassTransformer.transform, identifierGenerator,
+            reporter);
+
+      chain(options.conciseBody, ConciseBodyTransformer.transformTree);
       chain(options.propertyMethods,
             PropertyMethodAssignmentTransformer.transformTree);
       chain(options.propertyNameShorthand,
             PropertyNameShorthandTransformer.transformTree);
-      chain(options.traceurClasses,
-            ClassTransformer.transform, reporter);
       chain(options.isExpression, IsExpressionTransformer.transformTree);
 
       // for of must come before destructuring and generator, or anything
@@ -211,7 +213,8 @@ traceur.define('codegeneration', function() {
             reporter);
 
       chain(options.collections || options.privateNames,
-            CollectionTransformer.transformTree);
+            CollectionTransformer.transformTree,
+            identifierGenerator);
 
       // Issue errors for any unbound variables
       chain(traceur.options.freeVariableChecker,
@@ -230,7 +233,8 @@ traceur.define('codegeneration', function() {
      */
     transformModules_: function(tree, opt_module) {
       if (opt_module) {
-        return ModuleTransformer.transformAsModule(opt_module, tree);
+        return ModuleTransformer.transformAsModule(this.project_, opt_module,
+                                                   tree);
       } else {
         return ModuleTransformer.transform(this.project_, tree);
       }

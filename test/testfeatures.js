@@ -9,7 +9,7 @@ var path = require('path');
  */
 function importScript(filename) {
   // TODO(rnystrom): Hack. Assumes this is being run from a sibling of src/.
-  filename = path.join('../src/', filename);
+  filename = path.join(__dirname, '../src/', filename);
   var script = fs.readFileSync(filename, 'utf8');
   if (!script) {
     throw new Error('Failed to import ' + filename);
@@ -118,6 +118,7 @@ function testScript(filePath) {
   var onlyInBrowser = false;
   var skip = false;
   var shouldCompile = true;
+  var expectedErrors = [];
   forEachPrologLine(source, function(line) {
     var m;
     if (line.indexOf('// Only in browser.') === 0) {
@@ -128,6 +129,8 @@ function testScript(filePath) {
       skip = true;
     } else if ((m = /\/\ Options:\s*(.+)/.exec(line))) {
       traceur.options.fromString(m[1]);
+    } else if ((m = /\/\/ Error:\s*(.+)/.exec(line))) {
+      expectedErrors.push(m[1]);
     }
   });
 
@@ -139,7 +142,7 @@ function testScript(filePath) {
   try {
     silenceConsole();
 
-    var reporter = new traceur.util.ErrorReporter();
+    var reporter = new traceur.util.TestErrorReporter();
     var sourceFile = new traceur.syntax.SourceFile(filePath, source);
     var tree = traceur.codegeneration.Compiler.compileFile(reporter,
                                                            sourceFile,
@@ -151,15 +154,28 @@ function testScript(filePath) {
         failScript(filePath, 'Compile error expected.');
         return false;
       }
+
+      var missingExpectations = expectedErrors.filter(function(expected) {
+        return !reporter.hasMatchingError(expected);
+      });
+      if (missingExpectations.length) {
+        failScript(filePath, 'Expected error missing.');
+        print('Expected errors:\n' + expectedErrors.join('\n') + '\n\n');
+        print('Actual errors:\n' + red(reporter.errors.join('\n')) + '\n\n');
+
+        return false;
+      }
       return true;
     }
 
     if (reporter.hadError()) {
       failScript(filePath, 'Unexpected compile error in script.');
+      print(red(reporter.errors.join('\n')) + '\n\n');
       return false;
     }
 
-    var javascript = traceur.codegeneration.ParseTreeWriter.write(tree, false);
+    var TreeWriter = traceur.outputgeneration.TreeWriter;
+    var javascript = TreeWriter.write(tree, false);
 
     try {
       traceur.strictGlobalEval(javascript);
@@ -290,7 +306,7 @@ importScript('traceur.js');
 // Run all of the feature scripts.
 var tests  = 0;
 var passes = 0;
-runFeatureScripts('feature');
+runFeatureScripts(path.join(__dirname, 'feature'));
 
 clearLastLine();
 if (passes == tests) {

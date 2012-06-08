@@ -123,6 +123,24 @@ var traceur = (function() {
     strictGlobalEval: strictGlobalEval
   };
 
+  
+  var sourceMapFiles =  [
+    'source-map/array-set',
+    'source-map/base64',
+    'source-map/base64-vlq',
+    'source-map/binary-search',
+    'source-map/util',
+    'source-map/source-map-generator',
+    'source-map/source-map-consumer',
+    'source-map/source-node'
+  ];
+  
+  sourceMapFiles.forEach(function(file) {
+    importScript('../third_party/source-map/lib/'+file+'.js');
+  });
+
+  importScript('../src/outputgeneration/SourceMapIntegration.js');
+
   var scripts = [
     'options.js',
     'util/util.js',
@@ -131,8 +149,8 @@ var traceur = (function() {
     'util/SourceRange.js',
     'util/SourcePosition.js',
     'util/url.js',
-    'syntax/Token.js',
     'syntax/TokenType.js',
+    'syntax/Token.js',
     'syntax/LiteralToken.js',
     'syntax/IdentifierToken.js',
     'syntax/Keywords.js',
@@ -145,36 +163,28 @@ var traceur = (function() {
     'syntax/trees/ParseTrees.js',
     'util/ErrorReporter.js',
     'util/MutedErrorReporter.js',
+    'util/TestErrorReporter.js',
+    'codegeneration/ParseTreeFactory.js',
     'syntax/Parser.js',
     'syntax/ParseTreeVisitor.js',
     'util/StringBuilder.js',
     'semantics/VariableBinder.js',
     'semantics/symbols/SymbolType.js',
     'semantics/symbols/Symbol.js',
-    'semantics/symbols/MemberSymbol.js',
-    'semantics/symbols/MethodSymbol.js',
     'semantics/symbols/ModuleSymbol.js',
     'semantics/symbols/ExportSymbol.js',
-    'semantics/symbols/FieldSymbol.js',
-    'semantics/symbols/PropertyAccessor.js',
-    'semantics/symbols/GetAccessor.js',
-    'semantics/symbols/SetAccessor.js',
-    'semantics/symbols/PropertySymbol.js',
-    'semantics/symbols/AggregateSymbol.js',
-    'semantics/symbols/ClassSymbol.js',
     'semantics/symbols/Project.js',
-    'semantics/symbols/TraitSymbol.js',
-    'semantics/symbols/RequiresSymbol.js',
-    'semantics/ClassAnalyzer.js',
-    'codegeneration/ParseTreeWriter.js',
+    'outputgeneration/ParseTreeWriter.js',
+    'outputgeneration/ParseTreeMapWriter.js',
+    'outputgeneration/TreeWriter.js',
     'syntax/ParseTreeValidator.js',
-    'codegeneration/ParseTreeFactory.js',
     'codegeneration/ParseTreeTransformer.js',
+    'codegeneration/FindInFunctionScope.js',
+    'codegeneration/ConciseBodyTransformer.js',
     'codegeneration/ArrowFunctionTransformer.js',
     'codegeneration/PropertyMethodAssignmentTransformer.js',
     'codegeneration/PropertyNameShorthandTransformer.js',
     'codegeneration/AlphaRenamer.js',
-    'codegeneration/ArgumentsFinder.js',
     'codegeneration/TempVarTransformer.js',
     'codegeneration/DestructuringTransformer.js',
     'codegeneration/DefaultParametersTransformer.js',
@@ -183,7 +193,8 @@ var traceur = (function() {
     'codegeneration/UniqueIdentifierGenerator.js',
     'codegeneration/ForOfTransformer.js',
     'codegeneration/ModuleTransformer.js',
-    'codegeneration/FunctionTransformer.js',
+    'codegeneration/OperatorExpander.js',
+    'codegeneration/SuperTransformer.js',
     'codegeneration/CascadeExpressionTransformer.js',
     'codegeneration/ClassTransformer.js',
     'codegeneration/BlockBindingTransformer.js',
@@ -212,17 +223,17 @@ var traceur = (function() {
     'codegeneration/GeneratorTransformPass.js',
     'semantics/FreeVariableChecker.js',
     'codegeneration/ProgramTransformer.js',
-    'codegeneration/ProjectWriter.js',
+    'outputgeneration/ProjectWriter.js',
     'codegeneration/module/ModuleVisitor.js',
     'codegeneration/module/ModuleDefinitionVisitor.js',
     'codegeneration/module/ExportVisitor.js',
     'codegeneration/module/ModuleDeclarationVisitor.js',
     'codegeneration/module/ValidationVisitor.js',
     'codegeneration/module/ModuleRequireVisitor.js',
+    'codegeneration/module/ImportStarVisitor.js',
     'semantics/ModuleAnalyzer.js',
     'codegeneration/Compiler.js',
     'runtime/runtime.js',
-    'runtime/traits.js',
     'runtime/modules.js'
   ];
   scripts.forEach(importScript);

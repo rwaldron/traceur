@@ -25,7 +25,7 @@ traceur.define('runtime', function() {
 
   var ModuleTransformer = traceur.codegeneration.ModuleTransformer;
   var ProgramTransformer = traceur.codegeneration.ProgramTransformer;
-  var ParseTreeWriter = traceur.codegeneration.ParseTreeWriter;
+  var TreeWriter = traceur.outputgeneration.TreeWriter;
   var ModuleRequireVisitor = traceur.codegeneration.module.ModuleRequireVisitor;
 
   var canonicalizeUrl = traceur.util.canonicalizeUrl;
@@ -477,7 +477,7 @@ traceur.define('runtime', function() {
         try {
           // TODO(arv): Eval in the right context.
           result = traceur.strictGlobalEval(
-              ParseTreeWriter.write(codeUnit.transformedTree));
+              TreeWriter.write(codeUnit.transformedTree));
         } catch (ex) {
           codeUnit.error = ex.message
           this.abortAll();
@@ -509,6 +509,8 @@ traceur.define('runtime', function() {
    */
   var currentCodeUnit;
 
+  var standardModuleUrlRegExp = /^@\w+$/;
+
   /**
    * This is used to find the module for a require url ModuleExpression.
    * @param {string} url
@@ -516,6 +518,9 @@ traceur.define('runtime', function() {
    *     code loader.
    */
   function getModuleInstanceByUrl(url) {
+    if (standardModuleUrlRegExp.test(url))
+      return traceur.runtime.modules[url] || null;
+
     assert(currentCodeUnit);
     url = resolveUrl(currentCodeUnit.url, url);
     for (var i = 0; i < currentCodeUnit.dependencies.length; i++) {

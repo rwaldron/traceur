@@ -702,7 +702,7 @@ traceur.define('syntax', function() {
           }
           if (this.peek_('>')) {
             this.nextChar_();
-            return this.createToken_(TokenType.FAT_ARROW, beginToken);
+            return this.createToken_(TokenType.ARROW, beginToken);
           }
           return this.createToken_(TokenType.EQUAL, beginToken);
         case '!':
@@ -758,9 +758,6 @@ traceur.define('syntax', function() {
             case '=':
               this.nextChar_();
               return this.createToken_(TokenType.MINUS_EQUAL, beginToken);
-            case '>':
-              this.nextChar_();
-              return this.createToken_(TokenType.THIN_ARROW, beginToken);
             default:
               return this.createToken_(TokenType.MINUS, beginToken);
           }
@@ -877,6 +874,13 @@ traceur.define('syntax', function() {
       return new Token(type, this.getTokenRange_(beginToken));
     },
 
+    scanUnicode: function(beginToken, ch) {
+      // TODO: Implement Unicode escape sequence
+      this.reportError_(this.getPosition_(beginToken), 
+          'Unimplemented: Unicode escape sequence');
+      return this.createToken_(TokenType.ERROR, beginToken);
+    },
+
     /**
      * @param {number} beginToken
      * @param {string} ch
@@ -885,9 +889,7 @@ traceur.define('syntax', function() {
      */
     scanIdentifierOrKeyword: function(beginToken, ch, allowQuasiTag) {
       if (ch == '\\') {
-        // TODO: Unicode escape sequence
-        throw Error('Unicode escape sequence at line ' +
-                    this.getPosition().line);
+        return this.scanUnicode(beginToken, ch);
       }
       if (!isIdentifierStart(ch)) {
         this.reportError_(this.getPosition_(beginToken),
@@ -901,9 +903,7 @@ traceur.define('syntax', function() {
         this.nextChar_();
       }
       if (ch == '\\') {
-        // TODO: Unicode escape sequence
-        throw Error('Unicode escape sequence at line ' +
-                    this.getPosition().line);
+        return this.scanUnicode(beginToken, ch);
       }
 
       var value = this.source_.contents.substring(beginToken, this.index_);

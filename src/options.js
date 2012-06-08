@@ -253,6 +253,7 @@
   addFeatureOption('restParameters', Kind.es6);
   addFeatureOption('spread', Kind.es6);
   addFeatureOption('isExpression', Kind.es6);
+  addFeatureOption('conciseBody', Kind.es6);
 
   addFeatureOption('forOf', Kind.harmony);
   addFeatureOption('generators', Kind.harmony);
@@ -267,9 +268,10 @@
   addFeatureOption('propertyMethods', Kind.experimental);
   addFeatureOption('propertyNameShorthand', Kind.experimental);
   addFeatureOption('propertyOptionalComma', Kind.experimental);
-  addFeatureOption('traceurClasses', Kind.experimental);
+  addFeatureOption('classes', Kind.experimental);
 
   addBoolOption('debug');
+  addBoolOption('sourceMaps');
   addBoolOption('freeVariableChecker');
   addBoolOption('validate');
 

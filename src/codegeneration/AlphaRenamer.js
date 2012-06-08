@@ -28,6 +28,8 @@ traceur.define('codegeneration', function() {
   var IdentifierExpression = traceur.syntax.trees.IdentifierExpression;
   var ParseTree = traceur.syntax.trees.ParseTree;
 
+  var createFunctionDeclaration = ParseTreeFactory.createFunctionDeclaration;
+
   /**
    * Replaces one identifier with another identifier (alpha
    * renaming). This transformation is safe to use for renaming a
@@ -48,7 +50,6 @@ traceur.define('codegeneration', function() {
     ParseTreeTransformer.call(this);
     this.oldName_ = oldName;
     this.newName_ = newName;
-    Object.freeze(this);
   }
 
   /**
@@ -135,12 +136,14 @@ traceur.define('codegeneration', function() {
      * @return {ParseTree}
      */
     transformCatch: function(tree) {
-      if (this.oldName_ == tree.identifier.identifierToken.value) {
+      if (!tree.binding.isPattern() &&
+          this.oldName_ === tree.binding.identifierToken.value) {
         // this.oldName_ is rebound in the catch block, so don't recurse
         return tree;
-      } else {
-        return proto.transformCatch.call(this, tree);
       }
+
+      // TODO(arv): Compare the old name to the bindings in the pattern.
+      return proto.transformCatch.call(this, tree);
     }
   });
 

@@ -1,11 +1,12 @@
 // Should not compile.
+// Error: inner is not defined
 
 function testBlock() {
   {
-    let z = 'z value';
+    let inner = 'inner value';
   }
 
-  var x = z;
+  var x = inner;
 }
 
 // ----------------------------------------------------------------------------
