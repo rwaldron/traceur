@@ -21,6 +21,8 @@
 <title>Traceur</title>
 
 <script src="../src/traceur.js"></script>
+<script src="../third_party/ace/ace.js"></script>
+<script src="../third_party/ace/mode-javascript.js"></script>
 <style>
 
 @import url(http://fonts.googleapis.com/css?family=Droid+Sans+Mono);
@@ -31,20 +33,33 @@ html, body {
   margin: 0;
 }
 
-textarea {
+.textarea {
   display: block;
   width: 100%;
   height: 50%;
   margin: 0;
   border:  0;
-  border-bottom: 1px solid #aaa;
   box-sizing: border-box;
-  padding: 5px;
+  position: relative;
 }
 
-textarea,
+.resizer {
+  border-bottom: 1px solid #aaa;
+  cursor: s-resize;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+.resizer:hover {
+  height: 3px;
+  border-bottom: 1px solid #777;
+}
+
+.textarea,
 pre {
-  font: 12px 'Droid Sans Mono', sans-serif;
+  font: 12px 'Droid Sans Mono', monospace;
 }
 
 .error {
@@ -74,11 +89,12 @@ pre{
   border-radius: 5px 0 5px 5px;
   box-shadow: 1px 1px 5px rgba(0, 0, 0, .5);
   color: white;
-  font: 13px/20px 'Droid Sans', sans-serif;
+  font: 12px 'Droid Sans', sans-serif;
   padding: 10px;
   position: absolute;
   right: 0;
   top: 20px;
+  z-index: 110;
 }
 
 .options label {
@@ -96,10 +112,38 @@ pre{
   height: 1px;
 }
 
+.example-button {
+  background: black;
+  border: 0;
+  border-top-left-radius: 5px;
+  box-shadow: 1px 1px 5px rgba(0, 0, 0, .5);
+  color: white;
+  font: 13px/20px 'Droid Sans', sans-serif;
+  height: 25px;
+  margin: 0;
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 500;
+}
+
+.example {
+  background: white;
+  border-radius: 5px 0 5px 5px;
+  box-shadow: 1px 1px 5px rgba(0, 0, 0, .5);
+  font: 13px/20px 'Droid Sans Mono', monospace;
+  position: fixed;
+  height: 60%;
+  width: 50%;
+  right: 0;
+  bottom: 0;
+  z-index: 120;
+}
+
 </style>
 </head>
 <body>
-<textarea class="input"></textarea>
+<div class="textarea input"></div>
 <pre class="error"></pre>
 <pre class="eval"></pre>
 
@@ -114,6 +158,9 @@ pre{
 <button class="all-on">All Options On</button>
 <button class="all-off">All Options Off</button>
 </div>
+
+<button class="example-button">Examples</button>
+<div class="example" hidden></div>
 
 <script>
 
@@ -155,7 +202,7 @@ pre{
     var url = window.location.href;
     var project = new traceur.semantics.symbols.Project(url);
     var name = 'repl';
-    var contents = input.value;
+    var contents = input.getValue();
     var sourceFile = new traceur.syntax.SourceFile(name, contents);
     project.addFile(sourceFile);
     var res = traceur.codegeneration.Compiler.compile(reporter, project, false);
@@ -167,10 +214,10 @@ pre{
         var config = {file: 'traceured.js'};
         var sourceMapGenerator = new SourceMapGenerator(config);
         options = {sourceMapGenerator: sourceMapGenerator};
-      } 
+      }
 
       var source = output.textContent = ProjectWriter.write(res, options);
-          
+
       if (evalCheckbox.checked) {
         try {
           evalElement.textContent = ('global', eval)(source);
@@ -179,7 +226,7 @@ pre{
           errorElement.textContent = ex;
         }
       }
-      
+
       if (traceur.options.sourceMaps) {
         var renderedMap = renderSourceMap(source, options.sourceMap);
         sourceMapElement.textContent = renderedMap;
@@ -189,7 +236,95 @@ pre{
     errorElement.hidden = !hasError;
   }
 
-  input.addEventListener('input', compile, false);
+  input = ace.edit(input);
+  input.session.setUseWorker(false);
+  input.session.setMode("ace/mode/javascript");
+  var compileTimeout;
+  input.on('change', function() {
+    clearTimeout(compileTimeout);
+    compileTimeout = setTimeout(compile, 20);
+  });
+  var resizer = document.createElement("div");
+  resizer.className = "resizer";
+  input.container.appendChild(resizer);
+  var event = require("ace/lib/event");
+  event.addListener(resizer, "mousedown", function(e) {
+    event.capture(resizer, function(e) {
+      input.container.style.height = e.clientY / window.innerHeight * 100 + "%";
+      input.resize();
+    }, function() {});
+  });
+
+  // examples
+  var net = require("ace/lib/net");
+  var basePath = "../test/feature/"
+  function getExampleList(callback) {
+    var sourceList = [];
+    net.get(basePath + "feature_test.html", function(src) {
+      var re = /script src="(.+?)" type="text\/traceur"/g, m;
+      while (m = re.exec(src))
+        sourceList.push(m[1]);
+      callback(sourceList);
+    });
+  }
+
+  function createExampleList(sourceList) {
+    var div = document.querySelector('.example');
+    var editor = ace.editor = ace.edit(div);
+    editor.setValue(sourceList.join("\n"));
+    editor.setReadOnly(true);
+    editor.on("dblclick", function() {
+      var row = editor.getCursorPosition().row;
+      var name = editor.session.getLine(row);
+      input.exampleName = name
+      loadExample(name);
+    });
+  }
+
+  function loadExample(name) {
+    if (typeof assertEquals != "function")
+      window.assertEquals = function(a,b) { return a == b; };
+    if (typeof assertArrayEquals != "function")
+      window.assertArrayEquals = function(a,b) { return a == b; };
+    if (typeof assertTrue != "function")
+      window.assertTrue = function(a) { return a == true; };
+
+    net.get(basePath + name, function(src){
+      if (input.exampleName == name)
+        input.setValue(src, -1);
+    });
+  }
+
+  document.querySelector('.example-button').addEventListener('click',
+      function() {
+        var div = document.querySelector('.example');
+        div.hidden = !div.hidden;
+        if (!div.editor && !div.loading) {
+          div.loading = true;
+          getExampleList(createExampleList);
+        } else if (div.editor) {
+          div.editor.resize();
+        }
+      });
+
+  // options
+  function saveOptions() {
+    if (!window.localStorage)
+      return;
+    Object.keys(traceur.options).forEach(function(name) {
+      localStorage.setItem(name, traceur.options[name] + "");
+    });
+  }
+
+  function loadOptions() {
+    if (!window.localStorage)
+      return;
+    Object.keys(traceur.options).forEach(function(name) {
+      var o = localStorage.getItem(name);
+      if (o)
+        traceur.options[name] = o == "false" ? false : o == "true" ? true : null;
+    });
+  }
 
   function createOptionRow(name) {
     var label = document.createElement('label');
@@ -204,6 +339,7 @@ pre{
       traceur.options[name] = cb.checked;
       createOptions();
       compile();
+      saveOptions()
     };
     return label;
   }
@@ -219,6 +355,7 @@ pre{
     });
   }
 
+  loadOptions();
   createOptions();
 
   function rebuildOptions() {
@@ -226,31 +363,31 @@ pre{
     optionsDiv.innerHTML = '';
     createOptions();
   }
-  
+
   document.querySelector('.all-on').addEventListener('click',
       function() {
         traceur.options.reset();
         rebuildOptions();
       });
 
-  document.querySelector('.all-off').addEventListener('click', 
+  document.querySelector('.all-off').addEventListener('click',
     function() {
       traceur.options.reset(true);
       rebuildOptions();
     });
-  
+
   document.querySelector('.option-button').addEventListener('click',
       function() {
         var optionsDiv = document.querySelector('.options');
         optionsDiv.hidden = !optionsDiv.hidden;
       });
-      
+
   function renderSourceMap(source, sourceMap) {
     var consumer = new SourceMapConsumer(sourceMap);
     var lines = source.split('\n');
     var lineNumberTable = lines.map(function(line, lineNo) {
       var generatedPosition = {
-        line: lineNo + 1, 
+        line: lineNo + 1,
         column: 0
       };
       var position = consumer.originalPositionFor(generatedPosition);
@@ -259,7 +396,7 @@ pre{
     });
     return 'SourceMap:\n' + lineNumberTable.join('\n');
   }
-  
+
 })();
 
 </script>
