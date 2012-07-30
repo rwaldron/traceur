@@ -120,9 +120,9 @@
    *@param {boolean=} opt_allOff
    */
   function reset(opt_allOff) {
-    Object.keys(this).forEach(function(name) {
-      this[name] = !opt_allOff;
-    }, this);
+    Object.keys(options).forEach(function(name) {
+      options[name] = !opt_allOff;
+    });
   }
 
   /**
@@ -253,13 +253,14 @@
   addFeatureOption('restParameters', Kind.es6);
   addFeatureOption('spread', Kind.es6);
   addFeatureOption('isExpression', Kind.es6);
-  addFeatureOption('conciseBody', Kind.es6);
+  addFeatureOption('quasi', Kind.es6);
 
   addFeatureOption('forOf', Kind.harmony);
+  addFeatureOption('generatorComprehension', Kind.harmony);
+  addFeatureOption('arrayComprehension', Kind.harmony);
   addFeatureOption('generators', Kind.harmony);
   addFeatureOption('modules', Kind.harmony);
   addFeatureOption('privateNames', Kind.harmony);
-  addFeatureOption('quasi', Kind.harmony);
 
   addFeatureOption('arrowFunctions', Kind.experimental);
   addFeatureOption('cascadeExpression', Kind.experimental);

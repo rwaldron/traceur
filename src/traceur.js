@@ -93,7 +93,10 @@ var traceur = (function() {
   var global = ('global', eval)('this');
 
   // Allow script before this one to define a global importScript function.
-  var importScript = global.importScript || function(file) {
+  var importScript =
+      global.traceurImportScript ||
+      global.importScript ||
+      function(file) {
     if (!path) {
       // Find path to this js file
       var scripts = document.querySelectorAll('script');
@@ -180,7 +183,6 @@ var traceur = (function() {
     'syntax/ParseTreeValidator.js',
     'codegeneration/ParseTreeTransformer.js',
     'codegeneration/FindInFunctionScope.js',
-    'codegeneration/ConciseBodyTransformer.js',
     'codegeneration/ArrowFunctionTransformer.js',
     'codegeneration/PropertyMethodAssignmentTransformer.js',
     'codegeneration/PropertyNameShorthandTransformer.js',
@@ -201,6 +203,9 @@ var traceur = (function() {
     'codegeneration/QuasiLiteralTransformer.js',
     'codegeneration/CollectionTransformer.js',
     'codegeneration/IsExpressionTransformer.js',
+    'codegeneration/ComprehensionTransformer.js',
+    'codegeneration/GeneratorComprehensionTransformer.js',
+    'codegeneration/ArrayComprehensionTransformer.js',
     'codegeneration/generator/ForInTransformPass.js',
     'codegeneration/generator/State.js',
     'codegeneration/generator/FallThroughState.js',

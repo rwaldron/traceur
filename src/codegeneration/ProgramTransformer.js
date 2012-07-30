@@ -15,17 +15,17 @@
 traceur.define('codegeneration', function() {
   'use strict';
 
+  var ArrayComprehensionTransformer = traceur.codegeneration.ArrayComprehensionTransformer;
   var ArrowFunctionTransformer = traceur.codegeneration.ArrowFunctionTransformer;
   var BlockBindingTransformer = traceur.codegeneration.BlockBindingTransformer;
   var CascadeExpressionTransformer = traceur.codegeneration.CascadeExpressionTransformer;
   var ClassTransformer = traceur.codegeneration.ClassTransformer;
-  var ClassTransformer = traceur.codegeneration.ClassTransformer;
   var CollectionTransformer = traceur.codegeneration.CollectionTransformer;
-  var ConciseBodyTransformer = traceur.codegeneration.ConciseBodyTransformer;
   var DefaultParametersTransformer = traceur.codegeneration.DefaultParametersTransformer;
   var DestructuringTransformer = traceur.codegeneration.DestructuringTransformer;
   var ForOfTransformer = traceur.codegeneration.ForOfTransformer;
   var FreeVariableChecker = traceur.semantics.FreeVariableChecker;
+  var GeneratorComprehensionTransformer = traceur.codegeneration.GeneratorComprehensionTransformer;
   var GeneratorTransformPass = traceur.codegeneration.GeneratorTransformPass;
   var IsExpressionTransformer = traceur.codegeneration.IsExpressionTransformer;
   var ModuleTransformer = traceur.codegeneration.ModuleTransformer;
@@ -175,12 +175,20 @@ traceur.define('codegeneration', function() {
       chain(options.classes, ClassTransformer.transform, identifierGenerator,
             reporter);
 
-      chain(options.conciseBody, ConciseBodyTransformer.transformTree);
       chain(options.propertyMethods,
             PropertyMethodAssignmentTransformer.transformTree);
       chain(options.propertyNameShorthand,
             PropertyNameShorthandTransformer.transformTree);
       chain(options.isExpression, IsExpressionTransformer.transformTree);
+
+      // Generator/ArrayComprehensionTransformer must come before for-of and
+      // destructuring.
+      chain(options.generatorComprehension,
+            GeneratorComprehensionTransformer.transformTree,
+            identifierGenerator);
+      chain(options.arrayComprehension,
+            ArrayComprehensionTransformer.transformTree,
+            identifierGenerator);
 
       // for of must come before destructuring and generator, or anything
       // that wants to use VariableBinder

@@ -15,79 +15,76 @@
 traceur.define('codegeneration', function() {
   'use strict';
 
-  var ParseTreeTransformer = traceur.codegeneration.ParseTreeTransformer;
+  var LiteralExpression = traceur.syntax.trees.LiteralExpression;
+  var LiteralToken = traceur.syntax.LiteralToken;
+  var ParenExpression = traceur.syntax.trees.ParenExpression;
   var ParseTreeFactory = traceur.codegeneration.ParseTreeFactory;
-  var createCallExpression = ParseTreeFactory.createCallExpression;
-  var createIdentifierExpression = ParseTreeFactory.createIdentifierExpression;
-  var createMemberExpression = ParseTreeFactory.createMemberExpression;
+  var ParseTreeTransformer = traceur.codegeneration.ParseTreeTransformer;
+  var ParseTreeType = traceur.syntax.trees.ParseTreeType;
+  var PredefinedName = traceur.syntax.PredefinedName;
+  var Program = traceur.syntax.trees.Program;
+  var TokenType = traceur.syntax.TokenType;
+
   var createArgumentList = ParseTreeFactory.createArgumentList;
   var createArrayLiteralExpression = ParseTreeFactory.createArrayLiteralExpression;
+  var createAssignmentExpression = ParseTreeFactory.createAssignmentExpression;
+  var createBinaryOperator = ParseTreeFactory.createBinaryOperator;
+  var createCallExpression = ParseTreeFactory.createCallExpression;
+  var createCommaExpression = ParseTreeFactory.createCommaExpression;
+  var createDefineProperty = ParseTreeFactory.createDefineProperty;
+  var createIdentifierExpression = ParseTreeFactory.createIdentifierExpression;
+  var createMemberExpression = ParseTreeFactory.createMemberExpression;
   var createObjectFreeze = ParseTreeFactory.createObjectFreeze;
   var createObjectLiteralExpression = ParseTreeFactory.createObjectLiteralExpression;
-  var createPropertyNameAssignment = ParseTreeFactory.createPropertyNameAssignment;
+  var createOperatorToken = ParseTreeFactory.createOperatorToken;
+  var createParenExpression = ParseTreeFactory.createParenExpression;
   var createVariableDeclaration = ParseTreeFactory.createVariableDeclaration;
   var createVariableDeclarationList = ParseTreeFactory.createVariableDeclarationList;
   var createVariableStatement = ParseTreeFactory.createVariableStatement;
 
-  var LiteralExpression = traceur.syntax.trees.LiteralExpression;
-  var Program = traceur.syntax.trees.Program;
-  var LiteralToken = traceur.syntax.LiteralToken;
-  var PredefinedName = traceur.syntax.PredefinedName;
-  var TokenType = traceur.syntax.TokenType;
-
-  function getQuasiFunction(name) {
-    if (name) {
-      return createIdentifierExpression(name);
-    }
-    return createMemberExpression(PredefinedName.TRACEUR,
-                                  PredefinedName.RUNTIME,
-                                  PredefinedName.DEFAULT_QUASI);
-  }
-
   /**
    * Creates an object like:
-   * Object.freeze({
-   *   raw: Object.freeze(["literalPortion\\0 ", "literalPortion1"]),
-   *   cooked: Object.freeze(["literalPortion\u0000 ", "literalPortion1"])
-   * })
+   *
+   * (Object.defineProperty(tmp = CookedArray, 'raw', Object.freeze(RawArray),
+   *  Object.freeze(tmp))
    */
-  function createCallSiteIdObject(tree) {
+  function createCallSiteIdObject(tempVarName, tree) {
     var elements = tree.elements;
-    var isDefault = tree.name == null;
-    var cookedProperty = createPropertyNameAssignment(
-        PredefinedName.COOKED,
-        createObjectFreeze(createCookedStringArray(elements)));
-
-    // The default quasi does not need the cooked part.
-    if (isDefault) {
-      return createObjectFreeze(createObjectLiteralExpression(cookedProperty));
-    }
-
-    return createObjectFreeze(createObjectLiteralExpression(
-      createPropertyNameAssignment(
+    var expressions = [
+      createDefineProperty(
+          createAssignmentExpression(
+              createIdentifierExpression(tempVarName),
+              createCookedStringArray(elements)),
           PredefinedName.RAW,
-          createObjectFreeze(createRawStringArray(elements))),
-      cookedProperty));
+          {value: createObjectFreeze(createRawStringArray(elements))}),
+      createObjectFreeze(createIdentifierExpression(tempVarName))
+    ];
+    return createParenExpression(createCommaExpression(expressions));
   }
 
   function createRawStringArray(elements) {
     var items = [];
     for (var i = 0; i < elements.length; i += 2) {
       var str = replaceRaw(JSON.stringify(elements[i].value.value));
-      var expr = new LiteralExpression(null, new LiteralToken(TokenType.STRING,
-                                                              str, null));
+      var loc = elements[i].location;
+      var expr = new LiteralExpression(loc, new LiteralToken(TokenType.STRING,
+                                                             str, loc));
       items.push(expr);
     }
     return createArrayLiteralExpression(items);
   }
 
+  function createCookedStringLiteralExpression(tree) {
+    var str = cookString(tree.value.value);
+    var loc = tree.location;
+    return new LiteralExpression(loc, new LiteralToken(TokenType.STRING,
+                                                       str, loc));
+  }
+
   function createCookedStringArray(elements) {
     var items = [];
     for (var i = 0; i < elements.length; i += 2) {
-      var str = cookString(elements[i].value.value);
-      var expr = new LiteralExpression(null, new LiteralToken(TokenType.STRING,
-                                                              str, null));
-      items.push(expr);
+      items.push(createCookedStringLiteralExpression(elements[i]));
     }
     return createArrayLiteralExpression(items);
   }
@@ -181,6 +178,7 @@ traceur.define('codegeneration', function() {
   function QuasiLiteralTransformer(identifierGenerator) {
     ParseTreeTransformer.call(this);
     this.identifierGenerator_ = identifierGenerator;
+    this.tempVarName_ = identifierGenerator.generateUniqueIdentifier();
   }
 
   /*
@@ -196,6 +194,7 @@ traceur.define('codegeneration', function() {
   QuasiLiteralTransformer.prototype = traceur.createObject(proto, {
     transformProgram: function(tree) {
 
+
       this.callsiteDecls_ = [];
 
       var elements = this.transformList(tree.programElements);
@@ -203,20 +202,29 @@ traceur.define('codegeneration', function() {
         return tree;
       }
 
-      traceur.assert(this.callsiteDecls_.length > 0);
-      var varStatement = createVariableStatement(
-          createVariableDeclarationList(TokenType.CONST, this.callsiteDecls_));
-      elements.unshift(varStatement);
+      if (this.callsiteDecls_.length > 0) {
+        var tempVarStatement = createVariableStatement(
+            createVariableDeclarationList(TokenType.VAR, this.tempVarName_,
+                                          null));
+        var varStatement = createVariableStatement(
+            createVariableDeclarationList(TokenType.CONST,
+                                          this.callsiteDecls_));
+        elements.unshift(tempVarStatement, varStatement);
+      }
 
-      return new Program(null, elements);
+      return new Program(tree.location, elements);
     },
 
     transformQuasiLiteralExpression: function(tree) {
+      if (!tree.operand)
+        return this.createDefaultQuasi(tree);
+
+      var operand = this.transformAny(tree.operand);
       var elements = tree.elements;
       var args = [];
 
       var idName = this.identifierGenerator_.generateUniqueIdentifier();
-      var callsiteId = createCallSiteIdObject(tree);
+      var callsiteId = createCallSiteIdObject(this.tempVarName_, tree);
       var variableDecl = createVariableDeclaration(idName, callsiteId);
       this.callsiteDecls_.push(variableDecl);
 
@@ -226,13 +234,60 @@ traceur.define('codegeneration', function() {
         args.push(this.transformAny(elements[i]));
       }
 
-      return createCallExpression(
-          getQuasiFunction(tree.name),
-          createArgumentList(args));
+      return createCallExpression(operand, createArgumentList(args));
     },
 
     transformQuasiSubstitution: function(tree) {
-      return this.transformAny(tree.expression);
+      var transformedTree = this.transformAny(tree.expression);
+      // Wrap in a paren expression if needed.
+      switch (transformedTree.type) {
+        case ParseTreeType.BINARY_OPERATOR:
+          // Only * / and % have higher priority than +.
+          switch (transformedTree.operator.type) {
+            case TokenType.STAR:
+            case TokenType.PERCENT:
+            case TokenType.SLASH:
+              return transformedTree;
+          }
+          // Fall through.
+        case ParseTreeType.COMMA_EXPRESSION:
+        case ParseTreeType.CONDITIONAL_EXPRESSION:
+          return new ParenExpression(null, transformedTree);
+      }
+
+      return transformedTree;
+    },
+
+    transformQuasiLiteralPortion: function(tree) {
+      return createCookedStringLiteralExpression(tree);
+    },
+
+    createDefaultQuasi: function(tree) {
+      // convert to ("a" + b + "c" + d + "")
+      var length = tree.elements.length;
+      if (length === 0) {
+        var loc = tree.location;
+        return new LiteralExpression(loc, new LiteralToken(TokenType.STRING,
+                                                           '""', loc));
+      }
+
+      var binaryExpression = this.transformAny(tree.elements[0]);
+      if (length == 1)
+        return binaryExpression;
+
+      var plusToken = createOperatorToken(TokenType.PLUS);
+      for (var i = 1; i < length; i++) {
+        var element = tree.elements[i];
+        if (element.type === ParseTreeType.QUASI_LITERAL_PORTION &&
+            element.value.value === '') {
+          continue;
+        }
+        var transformedTree = this.transformAny(tree.elements[i]);
+        binaryExpression = createBinaryOperator(binaryExpression, plusToken,
+                                                transformedTree);
+      }
+
+      return new ParenExpression(null, binaryExpression);
     }
   });
 

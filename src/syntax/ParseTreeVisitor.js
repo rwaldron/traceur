@@ -66,6 +66,15 @@ traceur.define('syntax', function() {
     },
 
     /**
+     * @param {traceur.syntax.trees.ArrayComprehension} tree
+     */
+    visitArrayComprehension: function(tree) {
+      this.visitAny(tree.expression);
+      this.visitList(tree.comprehensionForList);
+      this.visitAny(tree.ifExpression);
+    },
+
+    /**
      * @param {traceur.syntax.trees.ArrayLiteralExpression} tree
      */
     visitArrayLiteralExpression: function(tree) {
@@ -188,6 +197,14 @@ traceur.define('syntax', function() {
      */
     visitCommaExpression: function(tree) {
       this.visitList(tree.expressions);
+    },
+
+    /**
+     * @param {traceur.syntax.trees.ComprehensionFor} tree
+     */
+    visitComprehensionFor: function(tree) {
+      this.visitAny(tree.left);
+      this.visitAny(tree.iterator);
     },
 
     /**
@@ -327,6 +344,15 @@ traceur.define('syntax', function() {
     },
 
     /**
+     * @param {traceur.syntax.trees.GeneratorComprehension} tree
+     */
+    visitGeneratorComprehension: function(tree) {
+      this.visitAny(tree.expression);
+      this.visitList(tree.comprehensionForList);
+      this.visitAny(tree.ifExpression);
+    },
+
+    /**
      * @param {traceur.syntax.trees.GetAccessor} tree
      */
     visitGetAccessor: function(tree) {
@@ -362,6 +388,7 @@ traceur.define('syntax', function() {
       if (tree.importSpecifierSet !== null) {
         this.visitList(tree.importSpecifierSet);
       }
+      this.visitAny(tree.moduleExpression);
     },
 
     /**
@@ -526,6 +553,7 @@ traceur.define('syntax', function() {
      * @param {traceur.syntax.trees.QuasiLiteralExpression} tree
      */
     visitQuasiLiteralExpression: function(tree) {
+      this.visitAny(tree.operand);
       this.visitList(tree.elements);
     },
 

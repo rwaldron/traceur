@@ -16,6 +16,7 @@ traceur.define('codegeneration', function() {
   'use strict';
 
   var ArgumentList = traceur.syntax.trees.ArgumentList;
+  var ArrayComprehension = traceur.syntax.trees.ArrayComprehension;
   var ArrayLiteralExpression = traceur.syntax.trees.ArrayLiteralExpression;
   var ArrayPattern = traceur.syntax.trees.ArrayPattern;
   var ArrowFunctionExpression = traceur.syntax.trees.ArrowFunctionExpression;
@@ -31,6 +32,7 @@ traceur.define('codegeneration', function() {
   var ClassDeclaration = traceur.syntax.trees.ClassDeclaration;
   var ClassExpression = traceur.syntax.trees.ClassExpression;
   var CommaExpression = traceur.syntax.trees.CommaExpression;
+  var ComprehensionFor = traceur.syntax.trees.ComprehensionFor;
   var ConditionalExpression = traceur.syntax.trees.ConditionalExpression;
   var DefaultClause = traceur.syntax.trees.DefaultClause;
   var DoWhileStatement = traceur.syntax.trees.DoWhileStatement;
@@ -46,6 +48,7 @@ traceur.define('codegeneration', function() {
   var ForStatement = traceur.syntax.trees.ForStatement;
   var FormalParameterList = traceur.syntax.trees.FormalParameterList;
   var FunctionDeclaration = traceur.syntax.trees.FunctionDeclaration;
+  var GeneratorComprehension = traceur.syntax.trees.GeneratorComprehension;
   var GetAccessor = traceur.syntax.trees.GetAccessor;
   var IfStatement = traceur.syntax.trees.IfStatement;
   var ImportBinding = traceur.syntax.trees.ImportBinding;
@@ -181,6 +184,25 @@ traceur.define('codegeneration', function() {
         return tree;
       }
       return new ArgumentList(tree.location, args);
+    },
+
+    /**
+     * @param {ArrayComprehension} tree
+     * @return {ParseTree}
+     */
+    transformArrayComprehension: function(tree) {
+      var expression = this.transformAny(tree.expression);
+      var comprehensionForList = this.transformList(tree.comprehensionForList);
+      var ifExpression = this.transformAny(tree.ifExpression);
+      if (expression === tree.expression &&
+          comprehensionForList === tree.comprehensionForList &&
+          ifExpression === tree.ifExpression) {
+        return tree;
+      }
+      return new ArrayComprehension(tree.location,
+                                    expression,
+                                    comprehensionForList,
+                                    ifExpression);
     },
 
     /**
@@ -385,6 +407,18 @@ traceur.define('codegeneration', function() {
         return tree;
       }
       return new CommaExpression(tree.location, expressions);
+    },
+
+    /**
+     * @param {ComprehensionFor} tree
+     * @return {ParseTree}
+     */
+    transformComprehensionFor: function(tree) {
+      var left = this.transformAny(tree.left);
+      var iterator = this.transformAny(tree.iterator);
+      if (left === tree.left && iterator === tree.iterator)
+        return tree;
+      return new ComprehensionFor(tree.location, left, iterator);
     },
 
     /**
@@ -616,6 +650,25 @@ traceur.define('codegeneration', function() {
      */
     transformFunctionBody: function(tree) {
       return this.transformAny(tree);
+    },
+
+    /**
+     * @param {GeneratorComprehension} tree
+     * @return {ParseTree}
+     */
+    transformGeneratorComprehension: function(tree) {
+      var expression = this.transformAny(tree.expression);
+      var comprehensionForList = this.transformList(tree.comprehensionForList);
+      var ifExpression = this.transformAny(tree.ifExpression);
+      if (expression === tree.expression &&
+          comprehensionForList === tree.comprehensionForList &&
+          ifExpression === tree.ifExpression) {
+        return tree;
+      }
+      return new GeneratorComprehension(tree.location,
+                                        expression,
+                                        comprehensionForList,
+                                        ifExpression);
     },
 
     /**
@@ -933,11 +986,11 @@ traceur.define('codegeneration', function() {
      * @return {ParseTree}
      */
     transformQuasiLiteralExpression: function(tree) {
+      var operand = this.transformAny(tree.operand);
       var elements = this.transformList(tree.elements);
-      if (elements == tree.elements) {
+      if (operand === tree.operand && elements == tree.elements)
         return tree;
-      }
-      return new QuasiLiteralExpression(tree.location, tree.name, elements);
+      return new QuasiLiteralExpression(tree.location, operand, elements);
     },
 
     /**
@@ -947,7 +1000,6 @@ traceur.define('codegeneration', function() {
     transformQuasiLiteralPortion: function(tree) {
       return tree;
     },
-
 
     /**
      * @param {QuasiSubstitution} tree

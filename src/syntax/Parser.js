@@ -23,6 +23,7 @@ traceur.define('syntax', function() {
   var TokenType = traceur.syntax.TokenType;
 
   var ArgumentList = traceur.syntax.trees.ArgumentList;
+  var ArrayComprehension = traceur.syntax.trees.ArrayComprehension;
   var ArrayLiteralExpression = traceur.syntax.trees.ArrayLiteralExpression;
   var ArrayPattern = traceur.syntax.trees.ArrayPattern;
   var ArrowFunctionExpression = traceur.syntax.trees.ArrowFunctionExpression;
@@ -40,6 +41,7 @@ traceur.define('syntax', function() {
   var ClassDeclaration = traceur.syntax.trees.ClassDeclaration;
   var ClassExpression = traceur.syntax.trees.ClassExpression;
   var CommaExpression = traceur.syntax.trees.CommaExpression;
+  var ComprehensionFor = traceur.syntax.trees.ComprehensionFor;
   var ConditionalExpression = traceur.syntax.trees.ConditionalExpression;
   var ContinueStatement = traceur.syntax.trees.ContinueStatement;
   var DebuggerStatement = traceur.syntax.trees.DebuggerStatement;
@@ -58,6 +60,7 @@ traceur.define('syntax', function() {
   var ForStatement = traceur.syntax.trees.ForStatement;
   var FormalParameterList = traceur.syntax.trees.FormalParameterList;
   var FunctionDeclaration = traceur.syntax.trees.FunctionDeclaration;
+  var GeneratorComprehension = traceur.syntax.trees.GeneratorComprehension;
   var GetAccessor = traceur.syntax.trees.GetAccessor;
   var IdentifierExpression = traceur.syntax.trees.IdentifierExpression;
   var IdentifierToken = traceur.syntax.IdentifierToken;
@@ -1789,8 +1792,7 @@ traceur.define('syntax', function() {
         case TokenType.SLASH_EQUAL:
           return this.parseRegularExpressionLiteral_();
         case TokenType.BACK_QUOTE:
-        case TokenType.QUASI_TAG:
-          return this.parseQuasiLiteral_();
+          return this.parseQuasiLiteral_(null);
         default:
           return this.parseMissingPrimaryExpression_();
       }
@@ -1882,35 +1884,54 @@ traceur.define('syntax', function() {
 
     // 11.1.4 Array Literal Expression
     /**
+     * Parse array literal and delegates to {@code parseArrayComprehension_} as
+     * needed.
+     *
+     * ArrayLiteral :
+     *   [ Elisionopt ]
+     *   [ ElementList ]
+     *   [ ElementList , Elisionopt ]
+     *
+     * ElementList :
+     *   Elisionopt AssignmentExpression
+     *   Elisionopt ... AssignmentExpression
+     *   ElementList , Elisionopt AssignmentExpression
+     *   ElementList , Elisionopt SpreadElement
+     *
+     * Elision :
+     *   ,
+     *   Elision ,
+     *
+     * SpreadElement :
+     *   ... AssignmentExpression
+     *
      * @return {ParseTree}
      * @private
      */
     parseArrayLiteral_: function() {
-      // ArrayLiteral :
-      //   [ Elisionopt ]
-      //   [ ElementList ]
-      //   [ ElementList , Elisionopt ]
-      //
-      // ElementList :
-      //   Elisionopt AssignmentOrSpreadExpression
-      //   ElementList , Elisionopt AssignmentOrSpreadExpression
-      //
-      // Elision :
-      //   ,
-      //   Elision ,
 
       var start = this.getTreeStartLocation_();
+      var expression;
       var elements = [];
+      var allowFor = options.arrayComprehension;
 
       this.eat_(TokenType.OPEN_SQUARE);
       while (this.peek_(TokenType.COMMA) ||
              this.peekSpread_() ||
              this.peekAssignmentExpression_()) {
         if (this.peek_(TokenType.COMMA)) {
-          elements.push(new NullTree());
+          expression = new NullTree();
+          allowFor = false;
         } else {
-          elements.push(this.parseAssignmentOrSpread_());
+          expression = this.parseAssignmentOrSpread_();
         }
+
+        if (allowFor && this.peek_(TokenType.FOR))
+          return this.parseArrayComprehension_(start, expression);
+
+        allowFor = false;
+        elements.push(expression);
+
         if (!this.peek_(TokenType.CLOSE_SQUARE)) {
           this.eat_(TokenType.COMMA);
         }
@@ -1918,6 +1939,38 @@ traceur.define('syntax', function() {
       this.eat_(TokenType.CLOSE_SQUARE);
       return new ArrayLiteralExpression(
           this.getTreeLocation_(start), elements);
+    },
+
+    /**
+     * Continues parsing array comprehension.
+     *
+     * ArrayComprehension :
+     *   [ Assignment ￼ ComprehensionForList ]
+     *   [ AssignmentExpression ComprehensionForList if
+     *
+     * ComprehensionForList :
+     *   ComprehensionFor
+     *   ComprehensionForList ComprehensionFor
+     *
+     * ComprehensionFor :
+     *   for ForBinding of Expression
+     *
+     * ForBinding :
+     *   BindingIdentifier
+     *   BindingPattern
+     *
+     * @param {Location} start
+     * @param {[ParseTree} expression
+     * @return {ParseTree}
+     */
+    parseArrayComprehension_: function(start, expression) {
+      var comprehensionForList = this.parseComprehensionForList_();
+      var ifExpression = this.parseComprehensionIf_();
+      this.eat_(TokenType.CLOSE_SQUARE);
+      return new ArrayComprehension(this.getTreeLocation_(start),
+                                    expression,
+                                    comprehensionForList,
+                                    ifExpression);
     },
 
     // 11.1.4 Object Literal Expression
@@ -2018,7 +2071,7 @@ traceur.define('syntax', function() {
       var propertyName = this.nextToken_();
       this.eat_(TokenType.OPEN_PAREN);
       this.eat_(TokenType.CLOSE_PAREN);
-      var body = this.parseConciseBody_(false);
+      var body = this.parseFunctionBody_(false);
       return new GetAccessor(this.getTreeLocation_(start), propertyName, body);
     },
 
@@ -2042,7 +2095,7 @@ traceur.define('syntax', function() {
       this.eat_(TokenType.OPEN_PAREN);
       var parameter = this.parsePropertySetParameterList_();
       this.eat_(TokenType.CLOSE_PAREN);
-      var body = this.parseConciseBody_(false);
+      var body = this.parseFunctionBody_(false);
       return new SetAccessor(this.getTreeLocation_(start), propertyName,
                              parameter, body);
     },
@@ -2102,7 +2155,7 @@ traceur.define('syntax', function() {
       this.eat_(TokenType.OPEN_PAREN);
       var formalParameterList = this.parseFormalParameterList_();
       this.eat_(TokenType.CLOSE_PAREN);
-      var functionBody = this.parseConciseBody_(isGenerator);
+      var functionBody = this.parseFunctionBody_(isGenerator);
       return new PropertyMethodAssignment(this.getTreeLocation_(start),
           name, isGenerator, formalParameterList, functionBody);
     },
@@ -2153,7 +2206,6 @@ traceur.define('syntax', function() {
     peekExpression_: function(opt_index) {
       switch (this.peekType_(opt_index || 0)) {
         case TokenType.BACK_QUOTE:
-        case TokenType.QUASI_TAG:
           return options.quasi;
         case TokenType.BANG:
         case TokenType.CLASS:
@@ -2690,6 +2742,9 @@ traceur.define('syntax', function() {
               operand = new CascadeExpression(this.getTreeLocation_(start),
                                               operand, expressions);
               break;
+            case TokenType.BACK_QUOTE:
+              operand = this.parseQuasiLiteral_(operand);
+              break;
           }
         }
       }
@@ -2704,6 +2759,7 @@ traceur.define('syntax', function() {
       return this.peek_(TokenType.OPEN_PAREN) ||
           this.peek_(TokenType.OPEN_SQUARE) ||
           this.peek_(TokenType.PERIOD) ||
+          options.quasi && this.peek_(TokenType.BACK_QUOTE) ||
           options.cascadeExpression && this.peek_(TokenType.PERIOD_OPEN_CURLY);
     },
 
@@ -2741,6 +2797,10 @@ traceur.define('syntax', function() {
             var expressions = this.parseCascadeExpressions_();
             operand = new CascadeExpression(this.getTreeLocation_(start),
                                             operand, expressions);
+            break;
+
+          case TokenType.BACK_QUOTE:
+            operand = this.parseQuasiLiteral_(operand);
             break;
         }
       }
@@ -2805,6 +2865,7 @@ traceur.define('syntax', function() {
     peekMemberExpressionSuffix_: function() {
       return this.peek_(TokenType.OPEN_SQUARE) ||
           this.peek_(TokenType.PERIOD) ||
+          options.quasi && this.peek_(TokenType.BACK_QUOTE) ||
           options.cascadeExpression && this.peek_(TokenType.PERIOD_OPEN_CURLY);
     },
 
@@ -2886,13 +2947,15 @@ traceur.define('syntax', function() {
     },
 
     /**
+     * Parses arrow functions and paren expressions as well as delegates to
+     * {@code parseGeneratorComprehension_} if this begins a generator
+     * comprehension.
+     *
      * Arrow function support, see:
      * http://wiki.ecmascript.org/doku.php?id=strawman:arrow_function_syntax
      *
-     * Note: this is parsed differently than in the strawman. Instead of
-     * inserting arrow into many places in the grammar, it's treated like an
-     * operator with lower precedence than assignment but higher precedence than
-     * comma.
+     * Generator comprehensions syntax is in the ES6 draft,
+     * 11.1.7 Generator Comprehensions
      *
      * ArrowFunction :
      *   ArrowParameters => ConciseBody
@@ -2953,6 +3016,12 @@ traceur.define('syntax', function() {
               formals.push(this.parseRestParameter_());
             this.eat_(TokenType.CLOSE_PAREN);
 
+          // Generator comprehension
+          // ( CoverFormals for
+          } else if (this.peek_(TokenType.FOR) &&
+                     options.generatorComprehension) {
+            return this.parseGeneratorComprehension_(start, coverFormals);
+
           // ( CoverFormals )
           } else {
             this.eat_(TokenType.CLOSE_PAREN);
@@ -2969,8 +3038,7 @@ traceur.define('syntax', function() {
 
       this.eat_(TokenType.ARROW);
 
-      var allowConciseBody = true;
-      var body = this.parseConciseBody_(false, allowConciseBody);
+      var body = this.parseConciseBody_();
       var startLoc = this.getTreeLocation_(start);
       return new ArrowFunctionExpression(startLoc,
           new FormalParameterList(startLoc, formals),
@@ -3013,14 +3081,75 @@ traceur.define('syntax', function() {
      *
      * @param {boolean} isGenerator
      * @return {ParseTree}
-     */
-    parseConciseBody_: function(isGenerator, opt_allowExpression) {
-      var allowExpression = opt_allowExpression || options.conciseBody;
+     *
+     * @return {ParseTree} */
+    parseConciseBody_: function() {
       // The body can be a block or an expression. A '{' is always treated as
       // the beginning of a block.
-      if (!allowExpression || this.peek_(TokenType.OPEN_CURLY))
+      if (this.peek_(TokenType.OPEN_CURLY))
         return this.parseBlock_();
       return this.parseAssignmentExpression_();
+    },
+
+    /**
+     * Continues parsing generator exressions. The opening paren and the
+     * expression is parsed by parseArrowFunction_.
+     *
+     * https://bugs.ecmascript.org/show_bug.cgi?id=381
+     *
+     * GeneratorComprehension :
+     *   ( Expression ComprehensionForList )
+     *   ( Expression ComprehensionForList if Expression )
+     *
+     * ComprehensionForList :
+     *   ComprehensionFor
+     *   ComprehensionForList ComprehensionFor
+     *
+     * ComprehensionFor :
+     *   for ForBinding of Expression
+     */
+    parseGeneratorComprehension_: function(start, expression) {
+      var comprehensionForList = this.parseComprehensionForList_();
+      var ifExpression = this.parseComprehensionIf_();
+      this.eat_(TokenType.CLOSE_PAREN);
+      return new GeneratorComprehension(this.getTreeLocation_(start),
+                                        expression,
+                                        comprehensionForList,
+                                        ifExpression);
+    },
+
+    parseComprehensionForList_: function() {
+      var comprehensionForList = [];
+      while (this.peek_(TokenType.FOR)) {
+        this.eat_(TokenType.FOR);
+        var innerStart = this.getTreeStartLocation_();
+        var left = this.parseForBinding_();
+        this.eatId_(PredefinedName.OF);
+        var iterator = this.parseExpression_();
+        comprehensionForList.push(
+            new ComprehensionFor(this.getTreeLocation_(innerStart),
+                                 left, iterator));
+      }
+      return comprehensionForList;
+    },
+
+    parseComprehensionIf_: function() {
+      if (this.peek_(TokenType.IF)) {
+        this.eat_(TokenType.IF);
+        return this.parseExpression_();
+      }
+      return null;
+    },
+
+    /**
+     * ForBinding :
+     *   BindingIdentifier
+     *   BindingPattern
+     */
+    parseForBinding_: function() {
+      if (this.peekPattern_())
+        return this.parseBindingPattern_();
+      return this.parseBindingIdentifier_();
     },
 
     // Destructuring; see
@@ -3330,13 +3459,41 @@ traceur.define('syntax', function() {
 
     /**
      * Quasi Literals
-     * http://wiki.ecmascript.org/doku.php?id=harmony:quasis
-     * We diverge from the harmony wiki by allowing arbitrary expressions inside
-     * ${ ... }, even nested quasi literals.
-     * @return {QuasiLiteralExpression}
+     *
+     * Quasi ::
+     *   FullQuasi
+     *   QuasiHead
+     *
+     * FullQuasi ::
+     *   ` QuasiCharactersopt `
+     *
+     * QuasiHead ::
+     *   ` QuasiCharactersopt ${
+     *
+     * QuasiSubstitutionTail ::
+     *   QuasiMiddle
+     *   QuasiTail
+     *
+     * QuasiMiddle ::
+     *   } QuasiCharactersopt ${
+     *
+     * QuasiTail ::
+     *   } QuasiCharactersopt `
+     *
+     * QuasiCharacters ::
+     *   QuasiCharacter QuasiCharactersopt
+     *
+     * QuasiCharacter ::
+     *   SourceCharacter but not one of ` or \ or $
+     *   $ [lookahead not { ]
+     *   \ EscapeSequence
+     *   LineContinuation
+     *
+     * @param {ParseTree} operand
+     * @return {ParseTree}
      * @private
      */
-    parseQuasiLiteral_: function() {
+    parseQuasiLiteral_: function(operand) {
       if (!options.quasi) {
         return this.parseMissingPrimaryExpression_();
       }
@@ -3345,11 +3502,8 @@ traceur.define('syntax', function() {
         elements.push(new QuasiSubstitution(tree.location, tree));
       }
 
-      var start = this.getTreeStartLocation_();
-      var name = null;
-      if (this.peekType_() === TokenType.QUASI_TAG) {
-        name = this.eat_(TokenType.QUASI_TAG).value;
-      }
+      var start = operand ?
+          operand.location.start : this.getTreeStartLocation_();
 
       this.eat_(TokenType.BACK_QUOTE);
 
@@ -3363,34 +3517,24 @@ traceur.define('syntax', function() {
         elements.push(new QuasiLiteralPortion(this.getTreeLocation_(start),
                                               token));
 
-        if (!this.peekQuasiToken_(TokenType.DOLLAR)) {
+        if (!this.peekQuasiToken_(TokenType.DOLLAR))
           break;
-        }
 
         token = this.nextQuasiSubstitutionToken_();
         traceur.assert(token.type == TokenType.DOLLAR);
 
-        if (this.peekQuasiToken_(TokenType.OPEN_CURLY)) {
-          this.eat_(TokenType.OPEN_CURLY);
-          // The Harmony proposal only allows ident ('.' ident)*
-          var expression = this.parseExpression_();
-          if (!expression) {
-            return this.parseMissingPrimaryExpression_();
-          }
-          pushSubst(expression);
-          this.eat_(TokenType.CLOSE_CURLY);
-        } else {
-          token = this.nextQuasiIdentifier_();
-          traceur.assert(token.type == TokenType.IDENTIFIER);
-          pushSubst(new IdentifierExpression(this.getTreeLocation_(start),
-                                             token));
-        }
+        this.eat_(TokenType.OPEN_CURLY);
+        var expression = this.parseExpression_();
+        if (!expression)
+          return this.parseMissingPrimaryExpression_();
+        pushSubst(expression);
+        this.eat_(TokenType.CLOSE_CURLY);
       }
 
       this.eat_(TokenType.BACK_QUOTE);
 
       return new QuasiLiteralExpression(this.getTreeLocation_(start),
-                                        name, elements);
+                                        operand, elements);
     },
 
     /**

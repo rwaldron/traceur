@@ -24,6 +24,10 @@
 goog.require('goog.testing.jsunit');
 </script>
 <script src="../../src/traceur.js"></script>
+<script src="ArrayComprehension/Closure.js" type="text/traceur"></script>
+<script src="ArrayComprehension/Error_Disabled.js" type="text/traceur"></script>
+<script src="ArrayComprehension/Error_NotDefined.js" type="text/traceur"></script>
+<script src="ArrayComprehension/Simple.js" type="text/traceur"></script>
 <script src="ArrowFunctions/ArrowFunctions.js" type="text/traceur"></script>
 <script src="ArrowFunctions/Error_Disabled.js" type="text/traceur"></script>
 <script src="ArrowFunctions/Error_FreeVariableChecker.js" type="text/traceur"></script>
@@ -81,10 +85,6 @@ goog.require('goog.testing.jsunit');
 <script src="Collection/ArrayLike.js" type="text/traceur"></script>
 <script src="Collection/Call.js" type="text/traceur"></script>
 <script src="Collection/Simple.js" type="text/traceur"></script>
-<script src="ConciseBody/Error_Disabled.js" type="text/traceur"></script>
-<script src="ConciseBody/GetAccessor.js" type="text/traceur"></script>
-<script src="ConciseBody/Method.js" type="text/traceur"></script>
-<script src="ConciseBody/SetAccessor.js" type="text/traceur"></script>
 <script src="DefaultParameters/Error_SetAccessor.js" type="text/traceur"></script>
 <script src="DefaultParameters/Simple.js" type="text/traceur"></script>
 <script src="Destructuring/Arguments.js" type="text/traceur"></script>
@@ -112,6 +112,10 @@ goog.require('goog.testing.jsunit');
 <script src="Destructuring/TopLevel.js" type="text/traceur"></script>
 <script src="Destructuring/VarDecl.js" type="text/traceur"></script>
 <script src="Error_FunctionParam.js" type="text/traceur"></script>
+<script src="GeneratorComprehension/Error_Disabled.js" type="text/traceur"></script>
+<script src="GeneratorComprehension/Error_NotDefined.js" type="text/traceur"></script>
+<script src="GeneratorComprehension/Simple.js" type="text/traceur"></script>
+<script src="GeneratorComprehension/Skip_Closure.js" type="text/traceur"></script>
 <script src="IsExpression/Error_Disabled.js" type="text/traceur"></script>
 <script src="IsExpression/Error_Syntax.js" type="text/traceur"></script>
 <script src="IsExpression/ObjectIs.js" type="text/traceur"></script>
@@ -150,12 +154,15 @@ goog.require('goog.testing.jsunit');
 <script src="Rest/Error_NotLast.js" type="text/traceur"></script>
 <script src="Rest/Error_SetAccessor.js" type="text/traceur"></script>
 <script src="Rest/Simple.js" type="text/traceur"></script>
+<script src="QuasiLiterals/CallExpression.js" type="text/traceur"></script>
+<script src="QuasiLiterals/CommaExpression.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Default.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Error_Disabled.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Error_InvalidSubstitution.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Error_InvalidSubstitution2.js" type="text/traceur"></script>
-<script src="QuasiLiterals/Error_NoWhitespaceAllowed.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Error_NotClosed.js" type="text/traceur"></script>
+<script src="QuasiLiterals/MemberExpression.js" type="text/traceur"></script>
+<script src="QuasiLiterals/StringRaw.js" type="text/traceur"></script>
 <script src="QuasiLiterals/Tag.js" type="text/traceur"></script>
 <script src="Scope/Error_BlockBinding1.js" type="text/traceur"></script>
 <script src="Scope/BlockBinding2.js" type="text/traceur"></script>
@@ -226,19 +233,21 @@ goog.require('goog.testing.jsunit');
 <script src="StringExtras/EndsWith.js" type="text/traceur"></script>
 <script src="StringExtras/StartsWith.js" type="text/traceur"></script>
 <script src="StringExtras/ToArray.js" type="text/traceur"></script>
+<script src="Yield/Arguments.js" type="text/traceur"></script>
+<script src="Yield/DefaultArguments.js" type="text/traceur"></script>
 <script src="Yield/DoGenerator.js" type="text/traceur"></script>
 <script src="Yield/EndYieldGenerator.js" type="text/traceur"></script>
 <script src="Yield/Error_Disabled.js" type="text/traceur"></script>
 <script src="Yield/Error_Disabled2.js" type="text/traceur"></script>
 <script src="Yield/Error_MissingStar.js" type="text/traceur"></script>
 <script src="Yield/Finally.js" type="text/traceur"></script>
-<script src="Yield/ForOfGenerator.js" type="text/traceur"></script>
 <script src="Yield/ForEmptyGenerator.js" type="text/traceur"></script>
 <script src="Yield/ForGenerator.js" type="text/traceur"></script>
 <script src="Yield/ForInGenerator.js" type="text/traceur"></script>
 <script src="Yield/ForInGenerator2.js" type="text/traceur"></script>
 <script src="Yield/ForInGenerator3.js" type="text/traceur"></script>
 <script src="Yield/ForLexicallyNestedGenerator.js" type="text/traceur"></script>
+<script src="Yield/ForOfGenerator.js" type="text/traceur"></script>
 <script src="Yield/IfGenerator.js" type="text/traceur"></script>
 <script src="Yield/LabelledBreakGenerator.js" type="text/traceur"></script>
 <script src="Yield/MapFilterGenerator.js" type="text/traceur"></script>
@@ -246,6 +255,7 @@ goog.require('goog.testing.jsunit');
 <script src="Yield/SimpleGenerator.js" type="text/traceur"></script>
 <script src="Yield/StatementTestGenerator.js" type="text/traceur"></script>
 <script src="Yield/SwitchGenerator.js" type="text/traceur"></script>
+<script src="Yield/This.js" type="text/traceur"></script>
 <script src="Yield/Tree.js" type="text/traceur"></script>
 <script src="Yield/TryCatchGenerator.js" type="text/traceur"></script>
 <script src="Yield/TryCatchYieldGenerator.js" type="text/traceur"></script>

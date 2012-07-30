@@ -93,6 +93,17 @@ traceur.define('outputgeneration', function() {
       this.write_(TokenType.CLOSE_PAREN);
     },
 
+    visitArrayComprehension: function(tree) {
+      this.write_(TokenType.OPEN_SQUARE);
+      this.visitAny(tree.expression);
+      this.visitList(tree.comprehensionForList);
+      if (tree.ifExpression) {
+        this.write_(TokenType.IF);
+        this.visitAny(tree.ifExpression);
+      }
+      this.write_(TokenType.CLOSE_SQUARE);
+    },
+
     /**
      * @param {ArrayLiteralExpression} tree
      */
@@ -264,6 +275,13 @@ traceur.define('outputgeneration', function() {
      */
     visitCommaExpression: function(tree) {
       this.writeList_(tree.expressions, TokenType.COMMA, false);
+    },
+
+    visitComprehensionFor: function(tree) {
+      this.write_(TokenType.FOR);
+      this.visitAny(tree.left);
+      this.write_(PredefinedName.OF);
+      this.visitAny(tree.iterator);
     },
 
     /**
@@ -464,6 +482,17 @@ traceur.define('outputgeneration', function() {
       this.visitAny(tree.functionBody);
     },
 
+    visitGeneratorComprehension: function(tree) {
+      this.write_(TokenType.OPEN_PAREN);
+      this.visitAny(tree.expression);
+      this.visitList(tree.comprehensionForList);
+      if (tree.ifExpression) {
+        this.write_(TokenType.IF);
+        this.visitAny(tree.ifExpression);
+      }
+      this.write_(TokenType.CLOSE_PAREN);
+    },
+
     /**
      * @param {GetAccessor} tree
      */
@@ -614,7 +643,7 @@ traceur.define('outputgeneration', function() {
      * @param {ModuleRequire} tree
      */
     visitModuleRequire: function(tree) {
-      this.visitAny(tree.url);
+      this.write_(tree.url);
     },
 
     /**
@@ -732,7 +761,7 @@ traceur.define('outputgeneration', function() {
      */
     visitQuasiLiteralExpression: function(tree) {
       // Quasi Literals have important whitespace semantics.
-      this.writeRaw_(tree.name);
+      this.visitAny(tree.operand);
       this.writeRaw_(TokenType.BACK_QUOTE);
       this.visitList(tree.elements);
       this.writeRaw_(TokenType.BACK_QUOTE);

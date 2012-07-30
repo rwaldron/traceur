@@ -51,6 +51,17 @@ traceur.define('syntax.trees', function() {
 
     /**
      * @param {traceur.util.SourceRange} location
+     * @param {ParseTree} expression
+     * @param {Array.<ParseTree>} comprehensionForList
+     * @param {ParseTree} ifExpression
+     * @constructor
+     * @extends {ParseTree}
+     */
+    ArrayComprehension: create('expression', 'comprehensionForList',
+                               'ifExpression'),
+
+    /**
+     * @param {traceur.util.SourceRange} location
      * @param {Array.<ParseTree>} elements
      * @constructor
      * @extends {ParseTree}
@@ -204,6 +215,15 @@ traceur.define('syntax.trees', function() {
      * @extends {ParseTree}
      */
     CommaExpression: create('expressions'),
+
+    /**
+     * @param {traceur.util.SourceRange} location
+     * @param {ParseTree} left
+     * @param {ParseTree} iterator
+     * @constructor
+     * @extends {ParseTree}
+     */
+    ComprehensionFor: create('left', 'iterator'),
 
     /**
      * @param {traceur.util.SourceRange} location
@@ -363,6 +383,17 @@ traceur.define('syntax.trees', function() {
     FunctionDeclaration: create('name', 'isGenerator',
                                 'formalParameterList',
                                 'functionBody'),
+
+    /**
+     * @param {traceur.util.SourceRange} location
+     * @param {ParseTree} expression
+     * @param {Array.<ParseTree>} comprehensionForList
+     * @param {ParseTree} ifExpression
+     * @constructor
+     * @extends {ParseTree}
+     */
+    GeneratorComprehension: create('expression', 'comprehensionForList',
+                                   'ifExpression'),
 
     /**
      * @param {traceur.util.SourceRange} location
@@ -602,12 +633,12 @@ traceur.define('syntax.trees', function() {
 
     /**
      * @param {traceur.util.SourceRange} location
-     * @param {string} name
+     * @param {ParseTree} operand
      * @param {Array.<ParseTree>} elements
      * @constructor
      * @extends {ParseTree}
      */
-    QuasiLiteralExpression: create('name', 'elements'),
+    QuasiLiteralExpression: create('operand', 'elements'),
 
     /**
      * @param {traceur.util.SourceRange} location

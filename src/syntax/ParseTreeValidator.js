@@ -22,8 +22,6 @@ traceur.define('syntax', function() {
   var PredefinedName = traceur.syntax.PredefinedName;
   var TokenType = traceur.syntax.TokenType;
 
-  var options = traceur.options.parse;
-
   /*
   TODO: add contextual information to the validator so we can check
   non-local grammar rules, such as:
@@ -596,10 +594,7 @@ traceur.define('syntax', function() {
      * @param {traceur.syntax.trees.GetAccessor} tree
      */
     visitGetAccessor: function(tree) {
-      if (!options.conciseBody)
-        this.checkType_(ParseTreeType.BLOCK, tree.body, 'block expected');
-      else
-        this.visitAny(tree.body);
+      this.checkType_(ParseTreeType.BLOCK, tree.body, 'block expected');
     },
 
     /**
@@ -809,6 +804,11 @@ traceur.define('syntax', function() {
      * @param {traceur.syntax.trees.QuasiLiteralExpression} tree
      */
     visitQuasiLiteralExpression: function(tree) {
+      if (tree.operand) {
+        this.checkVisit_(tree.operand.isMemberExpression(), tree.operand,
+                         'member or call expression expected');
+      }
+
       // The elements are alternating between QuasiLiteralPortion and
       // QuasiSubstitution.
       for (var i = 0; i < tree.elements.length; i++) {
@@ -840,10 +840,7 @@ traceur.define('syntax', function() {
      * @param {traceur.syntax.trees.SetAccessor} tree
      */
     visitSetAccessor: function(tree) {
-      if (!options.conciseBody)
-        this.checkType_(ParseTreeType.BLOCK, tree.body, 'block expected');
-      else
-        this.visitAny(tree.body);
+      this.checkType_(ParseTreeType.BLOCK, tree.body, 'block expected');
     },
 
     /**
