@@ -89,6 +89,9 @@
   // Cached path to the current script file in an HTML hosting environment.
   var path;
 
+  // Use comma expression to use global eval.
+   var global = window || ('global', eval)('this');
+
   // Allow script before this one to define a global importScript function.
   var importScript =
       global.traceurImportScript ||
