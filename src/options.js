@@ -36,7 +36,12 @@
     /**
      * For features that are not yet on the ES wiki
      */
-    experimental: 'experimental'
+    experimental: 'experimental',
+    
+    /**
+     * Features used to improve debugging
+     */
+    debugging: 'debugging'
   };
 
   var kindMapping = Object.create(null);
@@ -112,6 +117,19 @@
     },
     get experimental() {
       return getValue(Kind.experimental);
+    },
+
+    /**
+     * Meta option. Sets all options that are of Kind.debugging
+     * When getting this will return null if not all options of this kind
+     * have the same value.
+     * @type {boolean|null}
+     */
+    set debugging(v) {
+      enable(Kind.debugging, Boolean(v));
+    },
+    get debugging() {
+      return getValue(Kind.debugging);
     }
   };
 
@@ -277,6 +295,10 @@
   addFeatureOption('collections', Kind.experimental);
   addFeatureOption('deferredFunctions', Kind.experimental);
   addFeatureOption('propertyOptionalComma', Kind.experimental);
+
+  addFeatureOption('linearize', Kind.debugging);
+  options.debugging = false; // off by default
+  addFeatureOption('classes', Kind.experimental);
 
   addBoolOption('debug');
   addBoolOption('sourceMaps');
