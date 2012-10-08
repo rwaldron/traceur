@@ -12,19 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This file is sometimes used without traceur.js.
+if (!this.traceur)
+  this.traceur = {};
 
 /**
  * The traceur runtime.
  */
-var traceur = traceur || {};
-traceur.runtime = (function() {
+traceur.runtime = (function(global) {
   'use strict';
+
+  var $call = Function.prototype.call.bind(Function.prototype.call);
   var $create = Object.create;
   var $defineProperty = Object.defineProperty;
   var $freeze = Object.freeze;
+  var $getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
   var $getOwnPropertyNames = Object.getOwnPropertyNames;
   var $getPrototypeOf = Object.getPrototypeOf;
-  var $call = Function.prototype.call.bind(Function.prototype.call);
   var $hasOwnProperty = Object.prototype.hasOwnProperty;
   var bind = Function.prototype.bind;
 
@@ -79,29 +83,55 @@ traceur.runtime = (function() {
     writable: true
   });
 
-  function createClass(ctor, proto, extendsExpr) {
-    if (extendsExpr !== null && Object(extendsExpr) !== extendsExpr)
-      throw new TypeError('Can only extend objects or null');
+  function createClass(proto, extendsExpr, hasConstructor,
+                       hasExtendsExpression) {
+    if (extendsExpr !== null && typeof extendsExpr !== 'function')
+      throw new TypeError('Can only extend functions or null');
 
-    $defineProperty(proto, 'constructor', {value: ctor});
+    // If we provided a default constructor but the extends value is null we
+    // need to change the constructor to an empty function since we cannot call
+    // super in that case.
+    var ctor;
+    if (extendsExpr === null && !hasConstructor)
+      ctor = function() {};
+    else
+      ctor = proto.constructor;
 
     var superPrototype;
-    if (extendsExpr === null || !('prototype' in extendsExpr)) {
-      superPrototype = extendsExpr;
+    if (!hasExtendsExpression)  {
+      superPrototype = Object.prototype;
     } else {
-      ctor.__proto__ = extendsExpr;
-      superPrototype = extendsExpr.prototype;
+      if (extendsExpr === null) {
+        superPrototype = null;
+      } else {
+        ctor.__proto__ = extendsExpr;
+        superPrototype = extendsExpr.prototype;
+      }
     }
 
-    ctor.prototype = traceur.createObject(superPrototype, proto);
+    var descriptors = {};
+    $getOwnPropertyNames(proto).forEach(function(name) {
+      descriptors[name] = $getOwnPropertyDescriptor(proto, name);
+    });
+
+    descriptors.constructor.value = ctor;
+    descriptors.constructor.enumerable = false;
+    ctor.prototype = $create(superPrototype, descriptors);
+
     return ctor;
   }
 
-  function superCall(self, ctor, name, args) {
+  function getDescriptor(ctor, name) {
     var proto = $getPrototypeOf(ctor.prototype);
-    var descriptor = $getPropertyDescriptor(proto, name);
+    if (!proto)
+      throw new TypeError('super is null');
+    return $getPropertyDescriptor(proto, name);
+  }
+
+  function superCall(self, ctor, name, args) {
+    var descriptor = getDescriptor(ctor, name);
     if (descriptor) {
-      if (descriptor.value)
+      if ('value' in descriptor)
         return descriptor.value.apply(self, args);
       if (descriptor.get)
         return descriptor.get.call(self).apply(self, args);
@@ -110,8 +140,7 @@ traceur.runtime = (function() {
   }
 
   function superGet(self, ctor, name) {
-    var proto = $getPrototypeOf(ctor.prototype);
-    var descriptor = $getPropertyDescriptor(proto, name);
+    var descriptor = getDescriptor(ctor, name);
     if (descriptor) {
       if (descriptor.get)
         return descriptor.get.call(self);
@@ -122,8 +151,7 @@ traceur.runtime = (function() {
   }
 
   function superSet(self, ctor, name, value) {
-    var proto = $getPrototypeOf(ctor.prototype);
-    var descriptor = $getPropertyDescriptor(proto, name);
+    var descriptor = getDescriptor(ctor, name);
     if (descriptor && descriptor.set) {
       descriptor.set.call(self, value);
       return;
@@ -226,6 +254,12 @@ traceur.runtime = (function() {
   $freeze(Name);
   $freeze(Name.prototype);
 
+  function assertName(val) {
+    if (!NameModule.isName(val))
+      throw new TypeError(val + ' is not a Name');
+    return val;
+  }
+
   // Private name.
 
   // Collection getters and setters
@@ -262,14 +296,18 @@ traceur.runtime = (function() {
   }
 
   function elementDelete(object, name) {
-    if (hasPrivateNameProperty(object, elementDeleteName))
+    if (traceur.options.collections &&
+        hasPrivateNameProperty(object, elementDeleteName)) {
       return getProperty(object, elementDeleteName).call(object, name);
+    }
     return deleteProperty(object, name);
   }
 
   function elementGet(object, name) {
-    if (hasPrivateNameProperty(object, elementGetName))
+    if (traceur.options.collections &&
+        hasPrivateNameProperty(object, elementGetName)) {
       return getProperty(object, elementGetName).call(object, name);
+    }
     return getProperty(object, name);
   }
 
@@ -279,10 +317,12 @@ traceur.runtime = (function() {
   }
 
   function elementSet(object, name, value) {
-    if (hasPrivateNameProperty(object, elementSetName))
+    if (traceur.options.collections &&
+        hasPrivateNameProperty(object, elementSetName)) {
       getProperty(object, elementSetName).call(object, name, value);
-    else
+    } else {
       setProperty(object, name, value);
+    }
     return value;
   }
 
@@ -532,10 +572,15 @@ traceur.runtime = (function() {
     }
   });
 
-  // Return the traceur namespace.
+  // TODO(arv): Don't export this.
+  global.Deferred = Deferred;
+
+  // Return the runtime namespace.
   return {
-    createClass: createClass,
     Deferred: Deferred,
+    assertName: assertName,
+    createClass: createClass,
+    createName: NameModule.Name,
     elementDelete: elementDelete,
     elementGet: elementGet,
     elementHas: elementHas,
@@ -550,9 +595,6 @@ traceur.runtime = (function() {
     spreadNew: spreadNew,
     superCall: superCall,
     superGet: superGet,
-    superSet: superSet
+    superSet: superSet,
   };
-})();
-
-var Deferred = traceur.runtime.Deferred;
-
+})(this);

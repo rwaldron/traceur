@@ -167,7 +167,7 @@ traceur.define('codegeneration', function() {
    * @return {BindingElement}
    */
   function createBindingElement(arg) {
-    var binding = new createBindingIdentifier(arg);
+    var binding = createBindingIdentifier(arg);
     return new BindingElement(null, binding, null);
   }
 
@@ -810,28 +810,40 @@ traceur.define('codegeneration', function() {
   }
 
   /**
-   * Creates a call expression to Object.defineProperty(tree, name, descr).
-   *
-   * @param {ParseTree} tree
-   * @param {string} name
+   * Creates an object literal tree representing a property descriptor.
    * @param {Object} descr This is a normal js object. The values in the descr
    *     may be true, false or a ParseTree.
-   * @return {ParseTree}
+   * @return {ObjectLiteralExpression}
    */
-  function createDefineProperty(tree, name, descr) {
+  function createPropertyDescriptor(descr) {
     var propertyNameAndValues = Object.keys(descr).map(function(name) {
       var value = descr[name];
       if (!(value instanceof ParseTree))
         value = createBooleanLiteral(!!value);
       return createPropertyNameAssignment(name, value)
     });
+    return createObjectLiteralExpression(propertyNameAndValues);
+  }
+
+  /**
+   * Creates a call expression to Object.defineProperty(tree, name, descr).
+   *
+   * @param {ParseTree} tree
+   * @param {string|ParseTree} name
+   * @param {Object} descr This is a normal js object. The values in the descr
+   *     may be true, false or a ParseTree.
+   * @return {ParseTree}
+   */
+  function createDefineProperty(tree, name, descr) {
+    if (typeof name === 'string')
+      name = createStringLiteral(name);
 
     return createCallExpression(
       createMemberExpression(PredefinedName.OBJECT,
                              PredefinedName.DEFINE_PROPERTY),
       createArgumentList(tree,
-          createStringLiteral(name),
-          createObjectLiteralExpression(propertyNameAndValues)));
+          name,
+          createPropertyDescriptor(descr)));
   }
 
   /**
@@ -900,13 +912,11 @@ traceur.define('codegeneration', function() {
   }
 
   /**
-   * @param {string|IdentifierToken} identifier
+   * @param {string|IdentifierToken|BindingIdentifier} identifier
    * @return {RestParameter}
    */
   function createRestParameter(identifier) {
-    if (typeof identifier == 'string')
-      identifier = createIdentifierToken(identifier);
-    return new RestParameter(null, identifier);
+    return new RestParameter(null, createBindingIdentifier(identifier));
   }
 
   /**
@@ -1057,6 +1067,17 @@ traceur.define('codegeneration', function() {
   }
 
   /**
+   * Creates a (void 0) expression.
+   * @return {ParenExpression}
+   */
+  function createVoid0() {
+    return createParenExpression(
+      createUnaryExpression(
+        createOperatorToken(TokenType.VOID),
+        createNumberLiteral(0)));
+  }
+
+  /**
    * @param {ParseTree} condition
    * @param {ParseTree} body
    * @return {WhileStatement}
@@ -1105,8 +1126,9 @@ traceur.define('codegeneration', function() {
       createCallExpression: createCallExpression,
       createCallStatement: createCallStatement,
       createCaseClause: createCaseClause,
-      createCatch: createCatch,
+      createBindingElement: createBindingElement,
       createCascadeExpression: createCascadeExpression,
+      createCatch: createCatch,
       createClassDeclaration: createClassDeclaration,
       createCommaExpression: createCommaExpression,
       createConditionalExpression: createConditionalExpression,
@@ -1127,7 +1149,6 @@ traceur.define('codegeneration', function() {
       createForInStatement: createForInStatement,
       createForOfStatement: createForOfStatement,
       createForStatement: createForStatement,
-      createBindingElement: createBindingElement,
       createFunctionDeclaration: createFunctionDeclaration,
       createFunctionExpression: createFunctionExpression,
       createFunctionExpressionFormals: createFunctionExpressionFormals,
@@ -1154,6 +1175,7 @@ traceur.define('codegeneration', function() {
       createParenExpression: createParenExpression,
       createPostfixExpression: createPostfixExpression,
       createProgram: createProgram,
+      createPropertyDescriptor: createPropertyDescriptor,
       createPropertyNameAssignment: createPropertyNameAssignment,
       createPropertyNameToken: createPropertyNameToken,
       createRestParameter: createRestParameter,
@@ -1178,6 +1200,7 @@ traceur.define('codegeneration', function() {
       createVariableDeclaration: createVariableDeclaration,
       createVariableDeclarationList: createVariableDeclarationList,
       createVariableStatement: createVariableStatement,
+      createVoid0: createVoid0,
       createWhileStatement: createWhileStatement,
       createWithStatement: createWithStatement,
       createYieldStatement: createYieldStatement

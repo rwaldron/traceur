@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-var traceur = (function() {
+(function(global) {
   'use strict';
 
   /**
@@ -89,9 +89,6 @@ var traceur = (function() {
   // Cached path to the current script file in an HTML hosting environment.
   var path;
 
-  // Use comma expression to use global eval.
-  var global = ('global', eval)('this');
-
   // Allow script before this one to define a global importScript function.
   var importScript =
       global.traceurImportScript ||
@@ -117,34 +114,17 @@ var traceur = (function() {
     return ++uidCounter;
   }
 
-  // Do the export before we execute the rest.
-  global.traceur = {
-    assert: assert,
-    createObject: createObject,
-    define: define,
-    getUid: getUid,
-    strictGlobalEval: strictGlobalEval
-  };
-
-  
-  var sourceMapFiles =  [
-    'source-map/array-set',
-    'source-map/base64',
-    'source-map/base64-vlq',
-    'source-map/binary-search',
-    'source-map/util',
-    'source-map/source-map-generator',
-    'source-map/source-map-consumer',
-    'source-map/source-node'
-  ];
-  
-  sourceMapFiles.forEach(function(file) {
-    importScript('../third_party/source-map/lib/'+file+'.js');
-  });
-
-  importScript('../src/outputgeneration/SourceMapIntegration.js');
-
-  var scripts = [
+  var includes = [
+    // We assume we're always relative to "src/"
+    '../third_party/source-map/lib/source-map/array-set.js',
+    '../third_party/source-map/lib/source-map/base64.js',
+    '../third_party/source-map/lib/source-map/base64-vlq.js',
+    '../third_party/source-map/lib/source-map/binary-search.js',
+    '../third_party/source-map/lib/source-map/util.js',
+    '../third_party/source-map/lib/source-map/source-map-generator.js',
+    '../third_party/source-map/lib/source-map/source-map-consumer.js',
+    '../third_party/source-map/lib/source-map/source-node.js',
+    'outputgeneration/SourceMapIntegration.js',
     'options.js',
     'util/util.js',
     'util/ArrayMap.js',
@@ -154,6 +134,7 @@ var traceur = (function() {
     'util/url.js',
     'syntax/TokenType.js',
     'syntax/Token.js',
+    'syntax/AtNameToken.js',
     'syntax/LiteralToken.js',
     'syntax/IdentifierToken.js',
     'syntax/Keywords.js',
@@ -182,9 +163,9 @@ var traceur = (function() {
     'outputgeneration/TreeWriter.js',
     'syntax/ParseTreeValidator.js',
     'codegeneration/ParseTreeTransformer.js',
+    'codegeneration/FindVisitor.js',
     'codegeneration/FindInFunctionScope.js',
     'codegeneration/ArrowFunctionTransformer.js',
-    'codegeneration/PropertyMethodAssignmentTransformer.js',
     'codegeneration/PropertyNameShorthandTransformer.js',
     'codegeneration/AlphaRenamer.js',
     'codegeneration/TempVarTransformer.js',
@@ -206,6 +187,8 @@ var traceur = (function() {
     'codegeneration/ComprehensionTransformer.js',
     'codegeneration/GeneratorComprehensionTransformer.js',
     'codegeneration/ArrayComprehensionTransformer.js',
+    'codegeneration/ObjectLiteralTransformer.js',
+    'codegeneration/PrivateNameSyntaxTransformer.js',
     'codegeneration/generator/ForInTransformPass.js',
     'codegeneration/generator/State.js',
     'codegeneration/generator/FallThroughState.js',
@@ -241,7 +224,16 @@ var traceur = (function() {
     'runtime/runtime.js',
     'runtime/modules.js'
   ];
-  scripts.forEach(importScript);
 
-  return global.traceur;
-})();
+  // Do the export before we execute the rest.
+  global.traceur = {
+    assert: assert,
+    createObject: createObject,
+    define: define,
+    getUid: getUid,
+    strictGlobalEval: strictGlobalEval,
+    includes: includes
+  };
+
+  includes.forEach(importScript);
+})(this);
